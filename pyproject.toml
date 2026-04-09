@@ -15,8 +15,9 @@ dependencies = [
 [tool.uv.sources]
 automation-server-client = { git = "https://github.com/odense-rpa/automation-server-client.git", tag = "v0.2.0" }
 
-[tool.setuptools]
-py-modules = []
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
 
 [tool.ruff]
 target-version = "py313"
@@ -67,3 +68,13 @@ exclude = [
 pythonVersion = "3.13"
 typeCheckingMode = "basic"   # or "basic"
 reportMissingTypeStubs = true
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "uiautomation", "python-dotenv", "psutil", "docx2pdf", "pytest-timeout"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: requires Solteq Tand application and credentials (deselected by default)",
+]
+addopts = "-m 'not integration'"
+faulthandler_timeout = 0
