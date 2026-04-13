@@ -65,3 +65,15 @@ def open_patient(runner: AutomationRunner, app: SolteqTandApp, cpr: str):
     runner.register_cleanup(app.close_patient_window)
 
     logger.info("Patient window opened for CPR %s-XXXX.", cleaned_cpr[:6])
+
+
+def test_break_stuff(runner: AutomationRunner):
+    def raise_error():
+        logger.info("TAKE A SCREENSHOT OF ME!!! IM THE ERROR!!!!")
+        raise BusinessError("Breaking business stuff")
+
+    runner.step(
+        "Break stuff",
+        raise_error,
+        config=StepConfig(),
+    )

@@ -19,8 +19,8 @@ pytestmark = pytest.mark.integration
 
 # Guard the imports — skip the entire file if dependencies are missing
 try:
-    from src.core.automation_runner import AutomationRunner, StepError
-    from src.steps.solteq_open_patient_journal import open_patient, validate_cpr
+    from src.core.automation_runner import AutomationRunner
+    from src.steps.solteq_open_patient_journal import open_patient
     from src.steps.solteq_start_app import SOLTEQ_TAND_APP_PATH, start_solteq
 
     HAS_DEPENDENCIES = True

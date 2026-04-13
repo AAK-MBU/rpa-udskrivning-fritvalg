@@ -16,7 +16,8 @@ from PIL import ImageGrab
 
 logger = logging.getLogger(__name__)
 
-SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "..", "screenshots")
+# SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "..", "screenshots")
+SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "screenshots")
 
 
 def take_screenshot(runner_name: str, step: str, attempt: int) -> str | None:

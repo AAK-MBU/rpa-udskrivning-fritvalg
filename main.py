@@ -60,33 +60,26 @@ async def process_workqueue(workqueue: Workqueue):
                 with item:
                     data, reference = ats_functions.get_item_info(item)
 
-                    try:
-                        logger.info("Processing item with reference: %s", reference)
-                        process_item(data, reference)
+                    logger.info("Processing item with reference: %s", reference)
+                    process_item(data, reference)
 
-                        completed_state = CompletedState.completed(
-                            "Process completed without exceptions"
-                        )
-                        item.complete(str(completed_state))
+                    completed_state = CompletedState.completed(
+                        "Process completed without exceptions"
+                    )
+                    item.complete(str(completed_state))
 
-                        continue
-
-                    except BusinessError as e:
-                        context = ErrorContext(
-                            item=item,
-                            action=item.pending_user(str(e)),
-                            send_mail=False,
-                            process_name=workqueue.name,
-                        )
-                        handle_error(
-                            error=e,
-                            log=logger.info,
-                            context=context,
-                        )
-
-                    except Exception as e:
-                        pe = ProcessError(str(e))
-                        raise pe from e
+            except BusinessError as e:
+                context = ErrorContext(
+                    item=item,
+                    action=item.pending_user(str(e)),
+                    send_mail=False,
+                    process_name=workqueue.name,
+                )
+                handle_error(
+                    error=e,
+                    log=logger.info,
+                    context=context,
+                )
 
             except ProcessError as e:
                 context = ErrorContext(
@@ -97,6 +90,22 @@ async def process_workqueue(workqueue: Workqueue):
                 )
                 handle_error(
                     error=e,
+                    log=logger.error,
+                    context=context,
+                )
+                error_count += 1
+                reset()
+
+            except Exception as e:
+                pe = ProcessError(str(e))
+                context = ErrorContext(
+                    item=item,
+                    action=item.fail,
+                    send_mail=True,
+                    process_name=workqueue.name,
+                )
+                handle_error(
+                    error=pe,
                     log=logger.error,
                     context=context,
                 )
