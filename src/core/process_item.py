@@ -21,17 +21,10 @@ from src.helpers import config
 from src.helpers.clean_up import (
     clean_up_download_folder,
     clean_up_tmp_folder,
-    kill_application,
     release_keys,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def kill_adobe() -> None:
-    """Kill all Adobe Acrobat/Reader processes, whichever variant is installed."""
-    for name in ("Acrobat.exe", "AcroRd32.exe"):
-        kill_application(name)
 
 
 def process_item(item_data: dict, item_reference: str, item_id: int):
@@ -97,14 +90,11 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         # Step 12: Send journal and images trough EDI Portal
         rpa_db_conn = os.getenv("RPA_DB_CONNSTR", "")
         steps.send_via_edi_portal(runner, app, rpa_db_conn, ctx)
-        kill_adobe()
 
         # Step 13: Download receipt PDF from EDI Portal and store in Solteq
-        # TODO: Fix closing Adobe Reader
         steps.store_edi_receipt(runner, app, solteq_db_obj, ctx)
 
         # Step 14: Create administrativ note
-
         # TODO: Fix picking the correct journal in the drop down when creating a note
         steps.create_administrative_note(runner, app, solteq_db_obj, ctx)
 
@@ -132,6 +122,4 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
     finally:
         clean_up_download_folder()
         clean_up_tmp_folder()
-        kill_adobe()
-        kill_application("msedge.exe")
         logger.info(runner.summary())

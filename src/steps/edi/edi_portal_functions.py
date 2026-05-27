@@ -6,7 +6,8 @@ These functions should be moved to mbu_dev_shared_components/solteqtand/applicat
 import locale
 import re
 import time
-from datetime import datetime, timedelta
+from contextlib import suppress
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pyodbc
@@ -325,7 +326,8 @@ def edi_portal_add_content(
 
         try:
             date_str = data["dateOfExamination"]
-            date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+            year, month, day = date_str.split("-")
+            date_obj = date(int(year), int(month), int(day))
             return date_obj.strftime("%B %Y").capitalize()
         except (ValueError, KeyError):
             return "Error parsing date"
@@ -349,35 +351,35 @@ def edi_portal_add_content(
 
     # TODO: Check with Sara for what the message should contain.
 
-    # examination_date = _get_formatted_date(data=queue_element)
+    examination_date = _get_formatted_date(data=queue_element)
     # risk_profile_map = {0: "Grøn", 1: "Gul", 2: "Rød", 3: "Ukendt"}
     # risc_profile = risk_profile_map.get(queue_element.get("riskProfil"))
-    # dental_plan = queue_element.get("tandplejeplan", "Ukendt")
+    dental_plan = queue_element.get("tandplejeplan", "Ukendt")
 
-    # body_modified = re.sub(r"@examinationDate", examination_date, body)
+    body_modified = re.sub(r"@examinationDate", examination_date, body)
     # body_modified = re.sub(r"@riscProfile", risc_profile, body_modified)
-    # if journal_continuation_text:
-    #     if "Besked til privat tandlæge - Frit valg: " in journal_continuation_text:
-    #         journal_continuation_text = journal_continuation_text.replace(
-    #             "Besked til privat tandlæge - Frit valg: ", ""
-    #         )
-    #     elif (
-    #         "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: "
-    #         in journal_continuation_text
-    #     ):
-    #         journal_continuation_text = journal_continuation_text.replace(
-    #             "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: ",
-    #             "",
-    #         )
+    if journal_continuation_text:
+        if "Besked til privat tandlæge - Frit valg: " in journal_continuation_text:
+            journal_continuation_text = journal_continuation_text.replace(
+                "Besked til privat tandlæge - Frit valg: ", ""
+            )
+        elif (
+            "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: "
+            in journal_continuation_text
+        ):
+            journal_continuation_text = journal_continuation_text.replace(
+                "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: ",
+                "",
+            )
 
-    # if dental_plan:
-    #     body_modified = re.sub(
-    #         r"@dentalPlan",
-    #         f"Anden information: {journal_continuation_text}",
-    #         body_modified,
-    #     )
-    # else:
-    #     body_modified = re.sub(r"@dentalPlan", "", body_modified)
+    if dental_plan:
+        body_modified = re.sub(
+            r"@dentalPlan",
+            f"Anden information: {journal_continuation_text}",
+            body_modified,
+        )
+    else:
+        body_modified = re.sub(r"@dentalPlan", "", body_modified)
 
     # Truncate body to 31150 characters to fit EDI portal limitations
     body_modified = body[:31150]
@@ -499,6 +501,93 @@ def edi_portal_send_message() -> None:
         raise
 
 
+def _find_latest_matching_row(grid_pattern, subject: str) -> int | None:
+    """Find the most recent row in the sent grid matching the given subject."""
+
+    def _parse_date(date_str: str) -> datetime | None:
+        """Parse date from format like '11-09-2025 13:28'"""
+        if not date_str:
+            return None
+        try:
+            date, time = date_str.split(" ")
+            day, month, year = date.split("-")
+            hour, minute = time.split(":")
+            return datetime(
+                int(year), int(month), int(day), int(hour), int(minute), tzinfo=UTC
+            )
+        except ValueError:
+            return None
+
+    row_count = grid_pattern.RowCount
+    latest_matching_row = None
+    latest_date = None
+
+    for row in range(1, row_count):
+        message = grid_pattern.GetItem(row, 5).Name or ""
+        date_str = grid_pattern.GetItem(row, 1).Name or ""
+
+        if subject != message:
+            continue
+
+        parsed_date = _parse_date(date_str)
+        if parsed_date is not None and (
+            latest_date is None or parsed_date > latest_date
+        ):
+            latest_matching_row = row
+            latest_date = parsed_date
+
+    return latest_matching_row
+
+
+def _get_receipt_download_menu(root_web_area) -> object:
+    """Click into the dropdown menu for downloading a receipt, trying both CSS class variants."""
+    menu_popup = None
+
+    with suppress(TimeoutError):
+        menu_popup = wait_for_control(
+            root_web_area.ListControl,
+            {"ClassName": "dropdown-menu show"},
+            search_depth=50,
+            timeout=15,
+        )
+
+    if not menu_popup:
+        with suppress(TimeoutError):
+            menu_popup = wait_for_control(
+                root_web_area.ListControl,
+                {"ClassName": "dropdown-menu"},
+                search_depth=50,
+                timeout=15,
+            )
+
+    if not menu_popup:
+        raise TimeoutError("Could not find dropdown menu with any method")
+
+    return wait_for_control(
+        root_web_area.ListControl,
+        {"ClassName": "dropdown-menu show"},
+        search_depth=50,
+    )
+
+
+def _wait_for_receipt_download(timeout: int = 60) -> Path:
+    """Poll the Downloads folder until a Meddelelse*.pdf appears."""
+    download_path = Path.home() / "Downloads"
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        receipt = next(download_path.glob("Meddelelse*.pdf"), None)
+        if receipt is not None:
+            print(f"Receipt downloaded: {receipt}")
+            return receipt
+        print("Waiting for receipt to download...")
+        time.sleep(1)
+
+    raise FileNotFoundError(
+        "No file starting with 'Meddelelse' and ending with '.pdf' was found within the timeout period."
+    )
+
+
 def edi_portal_get_journal_sent_receip(subject: str) -> str:
     """
     Checks if the message was sent successfully in the EDI portal,
@@ -514,86 +603,26 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
         root_web_area = wait_for_control(
             auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
         )
-
         table_post_messages = wait_for_control(
             auto.TableControl, {"AutomationId": "dtSent"}, search_depth=50
         )
         grid_pattern = table_post_messages.GetPattern(auto.PatternId.GridPattern)
-        row_count = grid_pattern.RowCount
 
-        success_message = False
-        latest_matching_row = None
-        latest_date = None
+        latest_matching_row = _find_latest_matching_row(grid_pattern, subject)
 
-        def _parse_date(date_str: str) -> datetime | None:
-            """Parse date from format like '11-09-2025 13:28'"""
-            if not date_str:
-                return None
-            try:
-                return datetime.strptime(date_str, "%d-%m-%Y %H:%M")
-            except ValueError:
-                return None
-
-        if row_count > 0:
-            for row in range(1, row_count):
-                message = grid_pattern.GetItem(row, 5).Name or ""
-                date_str = grid_pattern.GetItem(row, 1).Name or ""
-
-                if subject == message:
-                    parsed_date = _parse_date(date_str)
-                    if parsed_date is not None:
-                        if latest_date is None or parsed_date > latest_date:
-                            latest_matching_row = row
-                            latest_date = parsed_date
-
-            # Use the latest matching row if found
-            if latest_matching_row is not None:
-                success_message = True
-
-        if success_message:
-            menu_button = grid_pattern.GetItem(latest_matching_row, 9)
-            print(f"Using latest matching row {latest_matching_row}")
-        else:
+        if latest_matching_row is None:
             print("Message not sent.")
             raise RuntimeError("Message not sent.")
 
+        print(f"Using latest matching row {latest_matching_row}")
+        menu_button = grid_pattern.GetItem(latest_matching_row, 9)
         menu_button.Click(simulateMove=False, waitTime=0)
         time.sleep(3)
 
-        menu_popup = None
-
-        try:
-            menu_popup = wait_for_control(
-                root_web_area.ListControl,
-                {"ClassName": "dropdown-menu show"},
-                search_depth=50,
-                timeout=15,
-            )
-        except TimeoutError:
-            pass
-
-        if not menu_popup:
-            try:
-                menu_popup = wait_for_control(
-                    root_web_area.ListControl,
-                    {"ClassName": "dropdown-menu"},
-                    search_depth=50,
-                    timeout=15,
-                )
-            except TimeoutError:
-                pass
-
-        if not menu_popup:
-            raise TimeoutError("Could not find dropdown menu with any method")
-
-        menu_popup = wait_for_control(
-            root_web_area.ListControl,
-            {"ClassName": "dropdown-menu show"},
-            search_depth=50,
-        )
+        menu_popup = _get_receipt_download_menu(root_web_area)
         menu_popup_item = wait_for_control(
             menu_popup.ListItemControl,
-            {"Name": " Gem"},
+            {"Name": " Gem"},
             search_depth=50,
         )
         menu_popup_item.SetFocus()
@@ -606,21 +635,7 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
         )
         menu_popup_item_save.Click(simulateMove=False, waitTime=0)
 
-        download_path = Path.home() / "Downloads"
-        timeout = 60
-        start_time = time.time()
-
-        while time.time() - start_time < timeout:
-            receipt = next(download_path.glob("Meddelelse*.pdf"), None)
-            if receipt is not None:
-                print(f"Receipt downloaded: {receipt}")
-                return receipt
-            print("Waiting for receipt to download...")
-            time.sleep(1)
-
-        raise FileNotFoundError(
-            "No file starting with 'Meddelelse' and ending with '.pdf' was found within the timeout period."
-        )
+        return _wait_for_receipt_download()
 
     except Exception as e:
         print(f"Error while downloading the receipt from EDI Portal: {e}")
@@ -666,11 +681,12 @@ def get_constants(conn_string: str, name: str) -> list:
         """
         params = (name,)
 
-        with pyodbc.connect(conn_string) as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(query, params)
-                columns = [column[0] for column in cursor.description]
-                constant_value = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        with pyodbc.connect(conn_string) as conn, conn.cursor() as cursor:
+            cursor.execute(query, params)
+            columns = [column[0] for column in cursor.description]
+            constant_value = [
+                dict(zip(columns, row, strict=True)) for row in cursor.fetchall()
+            ]
         return constant_value
     except pyodbc.Error as e:
         print(f"Database error: {e}")
@@ -693,7 +709,12 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         if not date_str:
             return None
         try:
-            return datetime.strptime(date_str, "%d-%m-%Y %H:%M")
+            date, time = date_str.split(" ")
+            day, month, year = date.split("-")
+            hour, minute = time.split(":")
+            return datetime(
+                int(year), int(month), int(day), int(hour), int(minute), tzinfo=UTC
+            )
         except ValueError:
             return None
 
@@ -732,7 +753,7 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         #             break
 
         # Define one month ago here
-        one_month_ago = datetime.now() - timedelta(days=30)
+        one_month_ago = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
 
         if row_count > 0:
             for row in range(1, row_count):

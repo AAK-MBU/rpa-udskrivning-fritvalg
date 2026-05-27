@@ -12,6 +12,7 @@ Run with: uv run pytest tests/ -v -m integration -p no:faulthandler
 """
 
 import os
+from contextlib import suppress
 
 import pytest
 from dotenv import load_dotenv
@@ -90,14 +91,10 @@ def solteq_app():
 
     yield app
 
-    try:
+    with suppress(Exception):
         app.close_patient_window()
-    except Exception:
-        pass
-    try:
+    with suppress(Exception):
         app.close_solteq_tand()
-    except Exception:
-        pass
 
 
 @pytest.fixture(scope="module")

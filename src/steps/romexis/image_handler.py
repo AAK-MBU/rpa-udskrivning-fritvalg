@@ -7,7 +7,7 @@ This module handles the processing of images.
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import date
 
 from romexis.helper_functions import add_black_bar_and_text_to_image
 
@@ -40,7 +40,9 @@ def format_image_date(date_value: object) -> str | None:
 
     date_str = str(date_value).strip()
 
-    if len(date_str) != 8 or not date_str.isdigit():
+    YYYYMMDD_LENGTH = 8
+
+    if len(date_str) != YYYYMMDD_LENGTH or not date_str.isdigit():
         logger.warning(
             "Invalid date format",
             extra={"date_value": date_value},
@@ -48,7 +50,7 @@ def format_image_date(date_value: object) -> str | None:
         return None
 
     try:
-        parsed_date = datetime.strptime(date_str, "%Y%m%d")
+        parsed_date = date(int(date_str[:4]), int(date_str[4:6]), int(date_str[6:]))
         formatted_date = parsed_date.strftime("%d/%m/%Y")
 
         logger.debug(

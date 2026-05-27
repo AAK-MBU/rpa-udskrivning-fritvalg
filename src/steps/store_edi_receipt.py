@@ -35,7 +35,9 @@ def _receipt_already_uploaded(db: SolteqTandDatabase, ctx: PatientContext) -> bo
     Returns:
         True if the receipt document already exists in Solteq.
     """
-    one_month_ago = datetime.datetime.now() - relativedelta(months=1)
+    one_month_ago = datetime.datetime.now(datetime.UTC).replace(
+        tzinfo=None
+    ) - relativedelta(months=1)
 
     documents = db.get_list_of_documents(
         filters={

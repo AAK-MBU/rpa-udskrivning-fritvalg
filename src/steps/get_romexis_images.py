@@ -20,7 +20,6 @@ import logging
 import os
 
 from romexis.db_handler import RomexisDbHandler
-from mbu_solteqtand_shared_components.database.db_handler
 
 from src.core.automation_runner import AutomationRunner
 from src.core.patient_context import PatientContext

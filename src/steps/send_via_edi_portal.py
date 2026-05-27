@@ -25,6 +25,7 @@ from mbu_solteqtand_shared_components.application import SolteqTandApp
 from src.core.automation_runner import AutomationRunner
 from src.core.patient_context import PatientContext
 from src.core.step_configs import StepConfig
+from src.helpers.clean_up import kill_adobe
 from src.steps.edi.edi_portal_handler import EdiContext, edi_portal_handler
 
 logger = logging.getLogger(__name__)
@@ -138,6 +139,7 @@ def _run_edi_pipeline(
     finally:
         app.close_edi_portal()
         runner.remove_cleanup(app.close_edi_portal)
+        kill_adobe()
 
 
 def send_via_edi_portal(

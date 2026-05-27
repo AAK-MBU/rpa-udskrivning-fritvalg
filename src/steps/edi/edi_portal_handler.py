@@ -127,8 +127,8 @@ def edi_portal_handler(context: EdiContext) -> str | None:
     pipeline: list[Step] = [
         # Navigation
         lambda ctxt: edifuncs.edi_portal_is_patient_data_sent(subject=ctxt.subject),
-        lambda ctxt: edifuncs.edi_portal_go_to_send_journal(),
-        lambda ctxt: edifuncs.edi_portal_click_next_button(sleep_time=2),
+        lambda _: edifuncs.edi_portal_go_to_send_journal(),
+        lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # Contractor lookup and selection
         lambda ctxt: edifuncs.edi_portal_lookup_contractor_id(
             extern_clinic_data=ctxt.extern_clinic_data
@@ -136,7 +136,7 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         lambda ctxt: edifuncs.edi_portal_choose_receiver(
             extern_clinic_data=ctxt.extern_clinic_data
         ),
-        lambda ctxt: edifuncs.edi_portal_click_next_button(sleep_time=2),
+        lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # Add journal content
         lambda ctxt: edifuncs.edi_portal_add_content(
             queue_element=ctxt.queue_element,
@@ -144,17 +144,17 @@ def edi_portal_handler(context: EdiContext) -> str | None:
             journal_continuation_text=ctxt.journal_note,
             extern_clinic_data=ctxt.extern_clinic_data,
         ),
-        lambda ctxt: edifuncs.edi_portal_click_next_button(sleep_time=2),
+        lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # File upload
         lambda ctxt: edifuncs.edi_portal_upload_files(
             path_to_files=ctxt.path_to_files_for_upload
         ),
-        lambda ctxt: edifuncs.edi_portal_click_next_button(sleep_time=2),
+        lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # Priority & send
         # lambda ctxt: edifuncs.edi_portal_choose_priority(),
-        lambda ctxt: edifuncs.edi_portal_click_next_button(sleep_time=60),
-        lambda ctxt: time.sleep(60),
-        lambda ctxt: edifuncs.edi_portal_send_message(),
+        lambda _: edifuncs.edi_portal_click_next_button(sleep_time=60),
+        lambda _: time.sleep(60),
+        lambda _: edifuncs.edi_portal_send_message(),
         # # Retrieve the sent receipt
         lambda ctxt: setattr(
             ctxt,

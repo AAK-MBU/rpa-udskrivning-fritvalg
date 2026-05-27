@@ -20,7 +20,6 @@ import os
 import pathlib
 import shutil
 
-from mbu_rpa_core.exceptions import BusinessError
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
 from src.core.automation_runner import AutomationRunner

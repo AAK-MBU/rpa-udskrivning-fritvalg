@@ -41,7 +41,9 @@ def _note_exists(db: SolteqTandDatabase, ctx: PatientContext) -> bool:
     Returns:
         True if the note already exists.
     """
-    one_month_ago = datetime.datetime.now() - relativedelta(months=1)
+    one_month_ago = datetime.datetime.now(datetime.UTC).replace(
+        tzinfo=None
+    ) - relativedelta(months=1)
 
     result = db.get_list_of_journal_notes(
         filters={

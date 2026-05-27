@@ -95,14 +95,10 @@ def solteq_app():
 
     yield app
 
-    try:
+    with suppress(Exception):
         app.close_patient_window()
-    except Exception:
-        pass
-    try:
+    with suppress(Exception):
         app.close_solteq_tand()
-    except Exception:
-        pass
 
 
 @pytest.fixture(scope="module")
@@ -267,8 +263,13 @@ class TestIdempotency:
         update_patient_info(runner_with_summary, solteq_app, ctx2)
         solteq_app.close_patient_window()
 
+        steps_after_second = len(runner_with_summary.completed_steps)
+
         for step in runner_with_summary.completed_steps:
             assert step.success is True, f"Step '{step.step}' failed"
+
+        # Second run should skip GUI updates since values already match
+        assert steps_after_second < steps_after_first
 
 
 # ------------------------------------------------------------------

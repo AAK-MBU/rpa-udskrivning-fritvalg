@@ -40,7 +40,7 @@ def startup():
     logger.info("Starting applications...")
 
     from src.core.automation_runner import AutomationRunner
-    from src.steps.solteq_start_app import get_solteq_credentials, start_solteq
+    from src.steps.solteq_start_app import start_solteq
 
     runner = AutomationRunner(name="Startup")
     app = start_solteq(runner)
@@ -59,32 +59,39 @@ def soft_close():
             APP.close_solteq_tand()
         except Exception as e:
             logger.warning("Error closing Solteq Tand: %s", e)
+    else:
+        logger.info("No Solteq app instance to close.")
 
 
 def hard_close():
     """Forcefully close Solteq Tand by killing the process."""
     logger.info("Closing applications hard...")
-    import subprocess
+    from src.helpers.clean_up import kill_tand
 
-    try:
-        subprocess.run(
-            ["taskkill", "/F", "/IM", "TMTand.exe"],
-            check=False,
-            capture_output=True,
-        )
-    except Exception as e:
-        logger.warning("Error killing TMTand.exe: %s", e)
+    kill_tand()
 
 
 def close():
-    """Close Solteq Tand softly, falling back to hard close."""
+    """Close Solteq softly (hard-kill fallback), then clean up other apps."""
+    logger.info("Closing applications...")
     try:
-        soft_close()
-    except Exception:
-        hard_close()
+        try:
+            soft_close()
+        except Exception as e:
+            logger.warning("Soft close failed (%s); falling back to hard close.", e)
+            hard_close()
+    finally:
+        logger.info("Cleaning up remaining applications.")
+        from src.helpers.clean_up import kill_adobe, kill_msedge
+
+        kill_adobe()
+        kill_msedge()
+    logger.info("Finished closing applications.")
 
 
 def reset():
     """Reset the application by closing and restarting."""
+    logger.info("Resetting applications...")
     close()
     startup()
+    logger.info("Finished resetting applications.")
