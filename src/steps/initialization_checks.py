@@ -12,8 +12,9 @@ retry configs — they either work or raise.
 
 import logging
 
-from mbu_dev_shared_components.solteqtand import SolteqTandApp, SolteqTandDatabase
 from mbu_rpa_core.exceptions import BusinessError
+from mbu_solteqtand_shared_components.application import SolteqTandApp
+from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
 from src.core.automation_runner import AutomationRunner
 from src.core.patient_context import PatientContext
@@ -22,47 +23,23 @@ from src.core.step_configs import StepConfig
 logger = logging.getLogger(__name__)
 
 
-def _get_error_message(db_conn: str, code: str, default: str) -> str:
-    """Look up a business error message from the database.
-
-    Args:
-        db_conn: RPA database connection string.
-        code: The exception code to look up (e.g. "1A", "1B").
-        default: Fallback message if the lookup fails.
-    """
-    try:
-        from src.helpers.db_utils import get_exceptions
-
-        exceptions = get_exceptions(db_conn)
-        return next(
-            (d["message_text"] for d in exceptions if d["exception_code"] == code),
-            default,
-        )
-    except Exception as e:
-        logger.warning("Failed to look up error message for code %s: %s", code, e)
-        return default
-
-
-def check_primary_clinic(
-    db: SolteqTandDatabase, ctx: PatientContext, rpa_db_conn: str
-) -> list:
+def check_primary_clinic(db: SolteqTandDatabase, ctx: PatientContext) -> list:
     """Check if primary clinic is set and return the data.
 
     Raises:
         BusinessError: If no primary clinic is found.
     """
     result = db.get_list_of_primary_dental_clinics(filters={"p.cpr": ctx.patient_cpr})
+
     if not result:
-        msg = _get_error_message(rpa_db_conn, "1A", "Primary clinic is not set.")
-        raise BusinessError(msg)
+        logger.warning("No primary dental clinic found.")
+        raise BusinessError("Fandt ingen stamklink.")
 
     logger.info("Primary clinic is set.")
     return result
 
 
-def check_extern_clinic(
-    db: SolteqTandDatabase, ctx: PatientContext, rpa_db_conn: str
-) -> list:
+def check_extern_clinic(db: SolteqTandDatabase, ctx: PatientContext) -> list:
     """Check extern dentist data: exists, has contractor ID, has phone number.
 
     Raises:
@@ -70,25 +47,23 @@ def check_extern_clinic(
     """
     result = db.get_list_of_extern_dentist(filters={"p.cpr": ctx.patient_cpr})
     if not result:
-        msg = _get_error_message(rpa_db_conn, "1B", "Extern dentist is not set.")
-        raise BusinessError(msg)
+        logger.warning("No external dentist found.")
+        raise BusinessError("Fandt ingen privatklink.")
 
     if not result[0].get("contractorId"):
-        msg = _get_error_message(rpa_db_conn, "1C", "Contractor ID is not set.")
-        raise BusinessError(msg)
+        logger.warning("No contractor ID for external dentist.")
+        raise BusinessError("Fandt ingen ydernummer.")
 
     if not result[0].get("phoneNumber"):
-        msg = _get_error_message(rpa_db_conn, "1E", "Phone number is not set.")
-        raise BusinessError(msg)
+        logger.warning("No phone number for external dentist.")
+        raise BusinessError("Telefonnummer er ikke sat for den private tandlæge")
 
     logger.info("Extern clinic data is valid.")
     return result
 
 
-def check_extern_clinic_deal(
-    db: SolteqTandDatabase, contractor_id: str, rpa_db_conn: str
-) -> None:
-    """Check if extern clinic has a deal with Aarhus Kommune.
+def check_extern_clinic_deal(db: SolteqTandDatabase, contractor_id: str) -> None:
+    """Check if extern clinic has a contract with Aarhus Kommune.
 
     Raises:
         BusinessError: If no deal is found.
@@ -96,16 +71,15 @@ def check_extern_clinic_deal(
     result = db.get_list_of_clinics(
         filters={"type": "3", "contractorId": contractor_id}
     )
+
     if not result:
-        msg = _get_error_message(rpa_db_conn, "1D", "No deal with Aarhus Kommune.")
-        raise BusinessError(msg)
+        logger.warning("Clinic has no contract with Aarhus Kommune.")
+        raise BusinessError("Klinikken har ikke en aftale.")
 
-    logger.info("Extern clinic has a deal with Aarhus Kommune.")
+    logger.info("Extern clinic has a contract with Aarhus Kommune.")
 
 
-def check_administrative_note(
-    db: SolteqTandDatabase, ctx: PatientContext, rpa_db_conn: str
-) -> list:
+def check_administrative_note(db: SolteqTandDatabase, ctx: PatientContext) -> list:
     """Check if administrative note exists (required when tandplejeplan is True).
 
     Raises:
@@ -119,17 +93,17 @@ def check_administrative_note(
         order_by="ds.Dokumenteret",
         order_direction="DESC",
     )
+
     if not result and ctx.tandplejeplan:
-        msg = _get_error_message(rpa_db_conn, "1F", "No administrative note found.")
-        raise BusinessError(msg)
+        logger.warning("No administrative note found.")
+        raise BusinessError("Fandt ingen journalnotat")
 
     logger.info("Administrative note check passed.")
+
     return result
 
 
-def check_other_documents(
-    db: SolteqTandDatabase, ctx: PatientContext, rpa_db_conn: str
-) -> None:
+def check_other_documents(db: SolteqTandDatabase, ctx: PatientContext) -> None:
     """Check if other documents exist (required when regionstilsagn is True).
 
     Raises:
@@ -143,15 +117,20 @@ def check_other_documents(
             "ds.DocumentType": "Udskrivning - Frit valg!$#",
         }
     )
+
     if not result and ctx.regionstilsagn:
-        msg = _get_error_message(rpa_db_conn, "1I", "No other documents found.")
-        raise BusinessError(msg)
+        logger.warning("No other documents found.")
+        raise BusinessError(
+            "Der er sat kryds ved regionstilagn i formularen, men robotten fandt ingen yderligere dokumenter på sagen."
+        )
 
     logger.info("Other documents check passed.")
 
 
 def check_contractor_in_edi_portal(
-    runner: AutomationRunner, app: SolteqTandApp, ctx: PatientContext, rpa_db_conn: str
+    runner: AutomationRunner,
+    app: SolteqTandApp,
+    ctx: PatientContext,
 ) -> None:
     """Open EDI portal and verify the contractor ID is valid.
 
@@ -179,20 +158,29 @@ def check_contractor_in_edi_portal(
             ctx.extern_clinic_data,
         )
 
+        if result is None:
+            raise RuntimeError("EDI portal contractor check returned None.")
+
         if result["rowCount"] == 0:
-            msg = _get_error_message(
-                rpa_db_conn, "1G", "Contractor not found in EDI portal."
-            )
-            raise BusinessError(msg)
+            logger.warning("Contractor not found in EDI portal.")
+            raise BusinessError("Fandt ikke ydernummeret i EDI Portalen")
 
         if result["isPhoneNumberMatch"] is False:
-            msg = _get_error_message(rpa_db_conn, "1H", "Phone number does not match.")
-            raise BusinessError(msg)
+            logger.warning("Phone number does not match.")
+            raise BusinessError(
+                "Den eksterne tandlæges telefonnummer fra Solteq Tand matchede ikke telefonnummeret i EDI Portalen"
+            )
 
         logger.info("Contractor ID verified in EDI portal.")
 
+    except (BusinessError, RuntimeError):
+        raise
+    except Exception as e:
+        logger.error("Unexpected error during EDI portal contractor check: %s", e)
+        raise RuntimeError("EDI portal contractor check failed") from e
     finally:
         runner.step("Close EDI portal", app.close_edi_portal)
+        runner.remove_cleanup(app.close_edi_portal)
 
 
 def run_initialization_checks(
@@ -200,7 +188,6 @@ def run_initialization_checks(
     app: SolteqTandApp,
     db: SolteqTandDatabase,
     item_data: dict,
-    rpa_db_conn: str,
 ) -> PatientContext:
     """Run all initialization checks and return a populated PatientContext.
 
@@ -213,7 +200,6 @@ def run_initialization_checks(
         app: The logged-in SolteqTandApp instance.
         db: The SolteqTandDatabase instance.
         item_data: Raw dictionary from the work queue item.
-        rpa_db_conn: RPA database connection string for error message lookups.
 
     Returns:
         A fully populated PatientContext.
@@ -223,17 +209,29 @@ def run_initialization_checks(
     """
     ctx = PatientContext.from_item_data(item_data)
 
-    logger.info("Running initialization checks for %s...", ctx.request_number)
+    logger.info("Running initialization checks...")
 
-    # Database checks — no GUI needed
-    ctx.primary_clinic_data = check_primary_clinic(db, ctx, rpa_db_conn)
-    ctx.extern_clinic_data = check_extern_clinic(db, ctx, rpa_db_conn)
-    check_extern_clinic_deal(db, ctx.contractor_id, rpa_db_conn)
-    ctx.administrative_note = check_administrative_note(db, ctx, rpa_db_conn)
-    check_other_documents(db, ctx, rpa_db_conn)
+    ctx.primary_clinic_data = check_primary_clinic(db, ctx)
+
+    if ctx.primary_clinic_data is None:
+        raise ValueError("Primary clinic data is missing.")
+
+    ctx.extern_clinic_data = check_extern_clinic(db, ctx)
+
+    if ctx.extern_clinic_data is None:
+        raise ValueError("Extern clinic data is missing.")
+
+    if ctx.contractor_id is None:
+        raise ValueError("Contractor ID is missing.")
+
+    check_extern_clinic_deal(db, ctx.contractor_id)
+
+    ctx.administrative_note = check_administrative_note(db, ctx)
+
+    check_other_documents(db, ctx)
 
     # GUI check — needs the runner for retry/screenshot
-    check_contractor_in_edi_portal(runner, app, ctx, rpa_db_conn)
+    check_contractor_in_edi_portal(runner, app, ctx)
 
     logger.info("All initialization checks passed.")
     return ctx

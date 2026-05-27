@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 
 from automation_server_client import WorkItem
-from mbu_dev_shared_components.database.connection import RPAConnection
+from mbu_rpa_core.database.connection import RPAConnection
 from mbu_rpa_core.exceptions import BusinessError, ProcessError
 
 from src.core.screenshot import screenshot_to_base64

@@ -3,27 +3,39 @@ TBW
 
 ## Test
 
-Unit tests only (skips integration)
+### Unit tests (ingen GUI nødvendig)
 ```bash
 uv run pytest tests/ -v
 ```
 
-All integration tests
+### Alle integrationstests
 ```bash
 uv run pytest tests/ -v -m integration -p no:faulthandler
 ```
 
-Just the initialization integration tests
-```bash
-uv run pytest tests/test_integration_initialization.py -v -m integration -p no:faulthandler
-```
-
-Just the startup integration tests
+### Specifik testfil
 ```bash
 uv run pytest tests/test_integration_solteq.py -v -m integration -p no:faulthandler
+uv run pytest tests/test_integration_initialization.py -v -m integration -p no:faulthandler
+uv run pytest tests/test_integration_update_patient_info.py -v -m integration -p no:faulthandler
 ```
 
-Everything together (unit + integration)
+### Specifik testklasse
+```bash
+uv run pytest tests/test_integration_update_patient_info.py::TestUpdateStatus -v -m integration -p no:faulthandler
+```
+
+### Specifik enkelt test
+```bash
+uv run pytest tests/test_integration_update_patient_info.py::TestUpdateStatus::test_status_updated_successfully -v -m integration -p no:faulthandler
+```
+
+### Kun full flow tests på tværs af alle filer
+```bash
+uv run pytest tests/ -v -m integration -p no:faulthandler -k "FullFlow or FullItemFlow"
+```
+
+### Alt sammen (unit + integration)
 ```bash
 uv run pytest tests/ -v -m "integration or not integration" -p no:faulthandler
 ```

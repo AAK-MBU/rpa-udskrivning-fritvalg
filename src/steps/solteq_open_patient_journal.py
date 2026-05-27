@@ -7,8 +7,8 @@ if later steps fail.
 
 import logging
 
-from mbu_dev_shared_components.solteqtand import SolteqTandApp
 from mbu_rpa_core.exceptions import BusinessError
+from mbu_solteqtand_shared_components.application import SolteqTandApp
 
 from src.core.automation_runner import AutomationRunner
 from src.core.step_configs import StepConfig
@@ -28,9 +28,10 @@ def validate_cpr(cpr: str) -> str:
     Raises:
         BusinessError: If the CPR number is invalid.
     """
+    _CPR_LENGTH = 10
     cleaned = cpr.replace("-", "")
 
-    if not cleaned.isdigit() or len(cleaned) != 10:
+    if not cleaned.isdigit() or len(cleaned) != _CPR_LENGTH:
         raise BusinessError(f"Invalid CPR number: {cpr}")
 
     return cleaned
