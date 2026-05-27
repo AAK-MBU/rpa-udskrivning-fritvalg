@@ -12,6 +12,8 @@ Usage:
 
 from dataclasses import dataclass, field
 
+from src.helpers.cpr_utils import is_under_16
+
 
 @dataclass
 class PatientContext:
@@ -36,7 +38,18 @@ class PatientContext:
 
     # Derived during process
     is_under_16: bool = False
-    discharge_document_filename: str = ""
+    discharge_document_filename: str | None = None
+
+    # Romexis specific data
+    romexis_zip_path: str | None = None
+    romexis_zip_filename: str | None = None
+
+    # EDI Portal specific data
+    edi_portal_file_paths: str | None = None
+    edi_receipt_path: str | None = None
+
+    # Dashboard
+    # process_name: str | None = None
 
     @property
     def contractor_id(self) -> str | None:
@@ -89,6 +102,13 @@ class PatientContext:
             return self.administrative_note[0].get("Beskrivelse")
         return None
 
+    @property
+    def process_name(self) -> str | None:
+        """Get the process name"""
+        if self.process_name:
+            return ""
+        return None
+
     @classmethod
     def from_item_data(cls, item_data: dict) -> "PatientContext":
         """Create a PatientContext from work queue item data.
@@ -101,10 +121,21 @@ class PatientContext:
             Initialization data fields are still empty — they get
             filled by run_initialization_checks().
         """
+        raw_cpr = item_data.get("patient_cpr") or item_data.get("cpr", "")
+        cleaned_cpr = raw_cpr.replace("-", "")
+
+        if not cleaned_cpr:
+            raise ValueError(
+                "Missing CPR in item_data (expected 'patient_cpr' or 'cpr')"
+            )
+
+        patient_name = item_data.get("patient_name") or item_data.get("name", "")
+
         return cls(
-            patient_cpr=item_data.get("cpr", "").replace("-", ""),
-            patient_name=item_data.get("name", ""),
+            patient_cpr=cleaned_cpr,
+            patient_name=patient_name,
             request_number=item_data.get("requestNumberServiceNow", ""),
             tandplejeplan=item_data.get("tandplejeplan", False),
             regionstilsagn=item_data.get("regionstilsagn", False),
+            is_under_16=is_under_16(cleaned_cpr) if cleaned_cpr else False,
         )

@@ -10,18 +10,31 @@ the runner and app instance.
 import logging
 import os
 
-from mbu_dev_shared_components.solteqtand import SolteqTandDatabase
+from mbu_rpa_core.exceptions import BusinessError
+from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
+from src import steps
 from src.core.application_handler import get_app, set_app
 from src.core.automation_runner import AutomationRunner
-from src.steps.initialization_checks import run_initialization_checks
-from src.steps.solteq_open_patient_journal import open_patient, test_break_stuff
-from src.steps.solteq_start_app import start_solteq
+from src.core.dashboard_data_handler import handle_process_dashboard
+from src.helpers import config
+from src.helpers.clean_up import (
+    clean_up_download_folder,
+    clean_up_tmp_folder,
+    kill_application,
+    release_keys,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def process_item(item_data: dict, item_reference: str):
+def kill_adobe() -> None:
+    """Kill all Adobe Acrobat/Reader processes, whichever variant is installed."""
+    for name in ("Acrobat.exe", "AcroRd32.exe"):
+        kill_application(name)
+
+
+def process_item(item_data: dict, item_reference: str, item_id: int):
     """Process a single work item through all automation phases.
 
     Args:
@@ -33,47 +46,92 @@ def process_item(item_data: dict, item_reference: str):
         ProcessError: If an automation step fails after retries (item is failed).
     """
     runner = AutomationRunner(name=f"Process-{item_reference}")
+    try:
+        handle_process_dashboard(
+            status="running",
+            process_step_name=config.PROCESS_STEP_NAME,
+        )
 
-    # Step 1: Open Solteq application and log in.
-    app = get_app()
-    if app is None:
-        app = start_solteq(runner)
-        set_app(app)
+        release_keys()
 
-    # Step 2: Navigate to the patients journal in Solteq Tand.
-    patient_cpr = item_data.get("cpr", "")
-    open_patient(runner, app, patient_cpr)
+        # Step 1: Open Solteq application and log in.
+        app = get_app()
+        if app is None:
+            app = steps.start_solteq(runner)
+            set_app(app)
 
-    # Step 3: Initialization checks -> produces PatientContext
-    solteq_db_obj = SolteqTandDatabase(os.getenv("DBCONNECTIONSTRINGSOLTEQTAND", ""))
-    rpa_db_conn = os.getenv("DBCONNECTIONSTRINGDEV", "")
+        # Step 2: Navigate to the patients journal in Solteq Tand.
+        steps.open_patient(runner=runner, app=app, cpr=item_data.get("cpr", ""))
 
-    ctx = run_initialization_checks(runner, app, solteq_db_obj, item_data, rpa_db_conn)
+        # Step 3: Initialization checks -> produces PatientContext (ctx)
+        solteq_db_obj = SolteqTandDatabase(
+            os.getenv("DBCONNECTIONSTRINGSOLTEQTAND", "")
+        )
+        ctx = steps.run_initialization_checks(runner, app, solteq_db_obj, item_data)
 
-    # Step 4: Check if patient is under 16 years.
+        # Step 4: Update patient journal data.
+        steps.update_patient_info(runner, app, ctx)
 
-    # Step 5: Update patient journal data.
+        # Step 5: Check if patient has a specific event, if so, process it.
+        steps.process_event(runner, app, solteq_db_obj, ctx)
 
-    # Step 6: Check if patient has a specific event, if so, process it.
+        # Step 6: Create booking reminder; Check if exists, if not, create it.
+        steps.create_booking_reminders(runner, app, solteq_db_obj, ctx)
 
-    # Step 7: Create booking reminder; Check if exists, if not, create it.
+        # Step 7: Create discharge document; Check if exists, if not, create it.
+        steps.create_discharge_document(runner, app, solteq_db_obj, ctx)
 
-    # Step 8: Create discharge document; Check if exists, if not, create it.
+        # Step 8: Send discharge document; Check if has been send, if not, send it.
+        steps.send_discharge_document(runner, app, solteq_db_obj, ctx)
 
-    # Step 9: Send discharge document; Check if has been send, if not, send it.
+        # Step 9: Get images from Romexis and create zip file.
+        romexis_db_conn = os.getenv("ROMEXIS_DB_CONNSTR", "")
+        steps.get_romexis_images(runner, romexis_db_conn, ctx)
 
-    # Step 10: Get images from Romexis and create zip file.
+        # Step 10: Create digital journal; Check if exists, if not, create it.
+        steps.create_medical_record(runner, app, solteq_db_obj, ctx)
 
-    # Step 11: Create digital journal; Check if exists, if not, create it.
+        # Step 11: Get all other relevant documents
+        steps.prepare_edi_documents(runner, solteq_db_obj, ctx)
 
-    # Step 12: Get all other relevant documents
+        # Step 12: Send journal and images trough EDI Portal
+        rpa_db_conn = os.getenv("RPA_DB_CONNSTR", "")
+        steps.send_via_edi_portal(runner, app, rpa_db_conn, ctx)
+        kill_adobe()
 
-    # Step 13: Send journal and images trough EDI Portal
+        # Step 13: Download receipt PDF from EDI Portal and store in Solteq
+        # TODO: Fix closing Adobe Reader
+        steps.store_edi_receipt(runner, app, solteq_db_obj, ctx)
 
-    # Step 14: Download receipt PDF from EDI Portal and store in Solteq
+        # Step 14: Create administrativ note
 
-    # Step 15: Create administrativ note
+        # TODO: Fix picking the correct journal in the drop down when creating a note
+        steps.create_administrative_note(runner, app, solteq_db_obj, ctx)
 
-    logger.info("administrativt notat: %s", ctx.administrative_note)
-
-    logger.info(runner.summary())
+        handle_process_dashboard(
+            status="success",
+            process_step_name=config.PROCESS_STEP_NAME,
+        )
+    except BusinessError as be:
+        logger.error("Business error occurred: %s", be)
+        handle_process_dashboard(
+            status="failed",
+            process_step_name=config.PROCESS_STEP_NAME,
+            failure=be,
+            rerun_config={"workitem_id": item_id},
+        )
+        raise
+    except Exception as e:
+        logger.error("%s", e)
+        handle_process_dashboard(
+            status="failed",
+            process_step_name=config.PROCESS_STEP_NAME,
+            failure=e,
+        )
+        raise
+    finally:
+        clean_up_download_folder()
+        clean_up_tmp_folder()
+        kill_adobe()
+        kill_application("msedge.exe")
+        logger.info(runner.summary())

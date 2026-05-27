@@ -1,15 +1,18 @@
 [project]
 name = "process-template"
-version = "0.0.0"
+version = "0.0.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "automation-server-client @ git+https://github.com/odense-rpa/automation-server-client.git",
-    "mbu-dev-shared-components>=3.0.0",
-    "mbu-rpa-core",
+    "aak-mbu-integration-romexis @ git+https://github.com/AAK-MBU/aak-mbu-integration-romexis.git@f7faa44",
+    "mbu-solteqtand-shared-components",
+    "mbu-rpa-core>=0.2.5",
+    "mbu-process-dashboard-shared-components==1.5.0",
     "pillow",
-    "ruff"
+    "ruff",
+    "tzdata",
 ]
 
 [tool.uv.sources]
@@ -33,28 +36,25 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-ignore = ["E501", "E251"]
+ignore = ["E501", "E251", "PLC0415"]
 select = [
-  "F",    # Pyflakes
-  "E",    # pycodestyle errors
-  "W",    # pycodestyle warnings
-  "I",    # isort (import sorting)
-  "UP",   # pyupgrade
-  "B",    # flake8-bugbear
-  "C4",   # flake8-comprehensions
-  "TC",   # flake8-type-checking
-  "ARG",  # flake8-unused-arguments
-  "DTZ",  # enforce timezone-aware datetimes
-  "SIM",  # flake8-simplify
-  "PL",   # pylint (subset)
+  "F",
+  "E",
+  "W",
+  "I",
+  "UP",
+  "B",
+  "C4",
+  "TC",
+  "ARG",
+  "DTZ",
+  "SIM",
+  "PL",
 ]
 
 [tool.ruff.lint.isort]
-# Keep imports tidy and deterministic
-# known-first-party = ["your_package_name"]
 
 [tool.ruff.format]
-# Use the formatter; CI step already checks it with `ruff format --check .`
 
 [tool.pyright]
 include = ["."]
@@ -66,11 +66,26 @@ exclude = [
   "__pycache__"
 ]
 pythonVersion = "3.13"
-typeCheckingMode = "basic"   # or "basic"
+typeCheckingMode = "basic"
+
+reportCallIssue = "none"
+reportArgumentType = "none"
+reportGeneralTypeIssues = "none"
+
 reportMissingTypeStubs = true
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff", "uiautomation", "python-dotenv", "psutil", "docx2pdf", "pytest-timeout"]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "ruff",
+  "uiautomation",
+  "python-dotenv",
+  "psutil",
+  "docx2pdf",
+  "pytest-timeout",
+  "rawpy",
+]
 
 [tool.pytest.ini_options]
 markers = [

@@ -1,15 +1,15 @@
 """Solteq Tand startup steps — launch application and log in.
 
-Uses the SolteqTandApp from mbu_dev_shared_components. Credentials
-are fetched from the Automation Server, and the app path is read
-from the process config.
+Uses the SolteqTandApp. Credentials are fetched from the
+Automation Server, and the app path is read from the
+process config.
 """
 
 import logging
 import os
 
 from dotenv import load_dotenv
-from mbu_dev_shared_components.solteqtand import SolteqTandApp
+from mbu_solteqtand_shared_components.application import SolteqTandApp
 
 from src.core.automation_runner import AutomationRunner
 from src.core.step_configs import StepConfig

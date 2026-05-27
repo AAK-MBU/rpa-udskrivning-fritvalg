@@ -58,10 +58,12 @@ async def process_workqueue(workqueue: Workqueue):
         for item in workqueue:
             try:
                 with item:
-                    data, reference = ats_functions.get_item_info(item)
+                    item_data, item_reference, item_id = ats_functions.get_item_info(
+                        item
+                    )
 
-                    logger.info("Processing item with reference: %s", reference)
-                    process_item(data, reference)
+                    logger.info("Processing item with reference: %s", item_reference)
+                    process_item(item_data, item_reference, item_id)
 
                     completed_state = CompletedState.completed(
                         "Process completed without exceptions"

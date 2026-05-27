@@ -8,7 +8,7 @@ start/login, and this module provides the global access point.
 
 import logging
 
-from mbu_dev_shared_components.solteqtand import SolteqTandApp
+from mbu_solteqtand_shared_components.application import SolteqTandApp
 
 logger = logging.getLogger(__name__)
 

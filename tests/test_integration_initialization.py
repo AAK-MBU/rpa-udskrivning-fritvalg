@@ -22,7 +22,7 @@ pytestmark = pytest.mark.integration
 
 # Guard imports — skip if uiautomation not available
 try:
-    from mbu_dev_shared_components.solteqtand import SolteqTandDatabase
+    from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
     from src.core.automation_runner import AutomationRunner
     from src.core.patient_context import PatientContext
@@ -127,7 +127,7 @@ def ctx():
 # ------------------------------------------------------------------
 class TestCheckPrimaryClinicIntegration:
     def test_returns_data_for_known_patient(self, solteq_db, ctx):
-        result = check_primary_clinic(solteq_db, ctx, RPA_DB_CONN)
+        result = check_primary_clinic(solteq_db, ctx)
 
         assert isinstance(result, list)
         assert len(result) > 0
@@ -137,7 +137,7 @@ class TestCheckPrimaryClinicIntegration:
 
 class TestCheckExternClinicIntegration:
     def test_returns_data_for_known_patient(self, solteq_db, ctx):
-        result = check_extern_clinic(solteq_db, ctx, RPA_DB_CONN)
+        result = check_extern_clinic(solteq_db, ctx)
 
         assert isinstance(result, list)
         assert len(result) > 0
@@ -148,16 +148,16 @@ class TestCheckExternClinicIntegration:
 class TestCheckExternClinicDealIntegration:
     def test_deal_exists_for_known_contractor(self, solteq_db, ctx):
         # First get the extern clinic to find the contractor ID
-        extern_data = check_extern_clinic(solteq_db, ctx, RPA_DB_CONN)
+        extern_data = check_extern_clinic(solteq_db, ctx)
         contractor_id = extern_data[0]["contractorId"]
 
         # Then check the deal — should not raise
-        check_extern_clinic_deal(solteq_db, contractor_id, RPA_DB_CONN)
+        check_extern_clinic_deal(solteq_db, contractor_id)
 
 
 class TestCheckAdministrativeNoteIntegration:
     def test_returns_notes_for_known_patient(self, solteq_db, ctx):
-        result = check_administrative_note(solteq_db, ctx, RPA_DB_CONN)
+        result = check_administrative_note(solteq_db, ctx)
 
         # Result can be empty if tandplejeplan is False or note exists
         assert isinstance(result, list)
@@ -166,7 +166,7 @@ class TestCheckAdministrativeNoteIntegration:
 class TestCheckOtherDocumentsIntegration:
     def test_check_completes_for_known_patient(self, solteq_db, ctx):
         # Should not raise for a valid test patient
-        check_other_documents(solteq_db, ctx, RPA_DB_CONN)
+        check_other_documents(solteq_db, ctx)
 
 
 # ------------------------------------------------------------------
@@ -180,7 +180,7 @@ class TestCheckContractorInEdiPortalIntegration:
         open_patient(runner_with_summary, solteq_app, ctx.patient_cpr)
 
         # Get extern clinic data from the database
-        ctx.extern_clinic_data = check_extern_clinic(solteq_db, ctx, RPA_DB_CONN)
+        ctx.extern_clinic_data = check_extern_clinic(solteq_db, ctx)
 
         # Run the EDI portal check
         check_contractor_in_edi_portal(
@@ -201,7 +201,12 @@ class TestCheckContractorInEdiPortalIntegration:
 # Full initialization flow
 # ------------------------------------------------------------------
 class TestRunInitializationChecksIntegration:
-    def test_full_initialization_flow(self, runner_with_summary, solteq_app, solteq_db):
+    def test_full_initialization_flow(
+        self,
+        runner_with_summary,
+        solteq_app,
+        solteq_db,
+    ):
         if not has_test_cpr():
             pytest.skip("TEST_PATIENT_CPR not set")
 
@@ -219,6 +224,7 @@ class TestRunInitializationChecksIntegration:
         ctx = run_initialization_checks(
             runner_with_summary, solteq_app, solteq_db, item_data, RPA_DB_CONN
         )
+        print("ctx: %s", ctx)
 
         # Verify the context was populated
         assert ctx.patient_cpr == TEST_PATIENT_CPR.replace("-", "")
@@ -234,7 +240,10 @@ class TestRunInitializationChecksIntegration:
         solteq_app.close_patient_window()
 
     def test_initialization_populates_all_context_fields(
-        self, runner_with_summary, solteq_app, solteq_db
+        self,
+        runner_with_summary,
+        solteq_app,
+        solteq_db,
     ):
         """Verify every field that later steps depend on is populated."""
         if not has_test_cpr():

@@ -85,6 +85,15 @@ class AutomationRunner:
             except Exception as e:
                 logger.warning("Cleanup action failed: %s", e)
 
+    def remove_cleanup(self, action):
+        """Remove a cleanup action after it's no longer needed."""
+        try:
+            self._cleanup_actions = [
+                (a, args) for a, args in self._cleanup_actions if a != action
+            ]
+        except Exception as e:
+            logger.warning("Remove cleanup action failed: %s", e)
+
     def step(
         self,
         description: str,
@@ -131,9 +140,6 @@ class AutomationRunner:
                 return result
 
             except BusinessError:
-                # Business logic issue — not an automation failure.
-                # Let it propagate untouched. The outer loop in main.py
-                # handles these.
                 elapsed = time.time() - start
                 self.completed_steps.append(
                     StepResult(description, attempt, success=False, duration=elapsed)
@@ -143,7 +149,6 @@ class AutomationRunner:
             except cfg.retryable as e:
                 elapsed = time.time() - start
 
-                # Screenshot IMMEDIATELY — before recovery or cleanup
                 screenshot = take_screenshot(self.name, description, attempt)
 
                 logger.warning(
@@ -197,7 +202,7 @@ class AutomationRunner:
             retry count, and whether a screenshot was captured.
 
         Example output:
-            Runner 'Process-001':
+            Summary: Runner 'Process-001':
               [OK] Open case lookup [1.2s]
               [OK] Search for case [0.8s]
               [OK] Open case from results (attempt 3) [7.4s] [screenshot saved]
@@ -205,7 +210,7 @@ class AutomationRunner:
               [FAILED] Save case (attempt 4) [12.8s] [screenshot saved]
               Total: 22.5s
         """
-        lines = [f"Runner '{self.name}':"]
+        lines = [f"Summary: Runner '{self.name}':"]
         for s in self.completed_steps:
             status = "OK" if s.success else "FAILED"
             attempts = f" (attempt {s.attempts})" if s.attempts > 1 else ""

@@ -7,8 +7,8 @@ if later steps fail.
 
 import logging
 
-from mbu_dev_shared_components.solteqtand import SolteqTandApp
 from mbu_rpa_core.exceptions import BusinessError
+from mbu_solteqtand_shared_components.application import SolteqTandApp
 
 from src.core.automation_runner import AutomationRunner
 from src.core.step_configs import StepConfig
