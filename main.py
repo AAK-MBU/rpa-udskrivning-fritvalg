@@ -10,12 +10,12 @@ from automation_server_client import AutomationServer, Workqueue
 from mbu_rpa_core.exceptions import BusinessError, ProcessError
 from mbu_rpa_core.process_states import CompletedState
 
-from helpers import ats_functions, config
-from processes.application_handler import close, reset, startup
-from processes.error_handling import ErrorContext, handle_error
-from processes.finalize_process import finalize_process
-from processes.process_item import process_item
-from processes.queue_handler import concurrent_add, retrieve_items_for_queue
+from src.core.application_handler import close, reset, startup
+from src.core.error_handling import ErrorContext, handle_error
+from src.core.finalize_process import finalize_process
+from src.core.process_item import process_item
+from src.core.queue_handler import concurrent_add, retrieve_items_for_queue
+from src.helpers import ats_functions, config
 
 logger = logging.getLogger(__name__)
 
@@ -58,35 +58,30 @@ async def process_workqueue(workqueue: Workqueue):
         for item in workqueue:
             try:
                 with item:
-                    data, reference = ats_functions.get_item_info(item)
+                    item_data, item_reference, item_id = ats_functions.get_item_info(
+                        item
+                    )
 
-                    try:
-                        logger.info("Processing item with reference: %s", reference)
-                        process_item(data, reference)
+                    logger.info("Processing item with reference: %s", item_reference)
+                    process_item(item_data, item_reference, item_id)
 
-                        completed_state = CompletedState.completed(
-                            "Process completed without exceptions"
-                        )
-                        item.complete(str(completed_state))
+                    completed_state = CompletedState.completed(
+                        "Process completed without exceptions"
+                    )
+                    item.complete(str(completed_state))
 
-                        continue
-
-                    except BusinessError as e:
-                        context = ErrorContext(
-                            item=item,
-                            action=item.pending_user(str(e)),
-                            send_mail=False,
-                            process_name=workqueue.name,
-                        )
-                        handle_error(
-                            error=e,
-                            log=logger.info,
-                            context=context,
-                        )
-
-                    except Exception as e:
-                        pe = ProcessError(str(e))
-                        raise pe from e
+            except BusinessError as e:
+                context = ErrorContext(
+                    item=item,
+                    action=item.pending_user(str(e)),
+                    send_mail=False,
+                    process_name=workqueue.name,
+                )
+                handle_error(
+                    error=e,
+                    log=logger.info,
+                    context=context,
+                )
 
             except ProcessError as e:
                 context = ErrorContext(
@@ -97,6 +92,22 @@ async def process_workqueue(workqueue: Workqueue):
                 )
                 handle_error(
                     error=e,
+                    log=logger.error,
+                    context=context,
+                )
+                error_count += 1
+                reset()
+
+            except Exception as e:
+                pe = ProcessError(str(e))
+                context = ErrorContext(
+                    item=item,
+                    action=item.fail,
+                    send_mail=True,
+                    process_name=workqueue.name,
+                )
+                handle_error(
+                    error=pe,
                     log=logger.error,
                     context=context,
                 )
