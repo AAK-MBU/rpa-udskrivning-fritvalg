@@ -160,7 +160,7 @@ def edi_portal_check_contractor_id(
 
         if row_count > 0:
             for row in range(row_count):
-                phone_number = grid_pattern.GetItem(row, 4).Name
+                phone_number = grid_pattern.GetItem(row, 5).Name
                 if phone_number == clinic_phone_number:
                     is_phone_number_match = True
                     break
@@ -284,7 +284,7 @@ def edi_portal_choose_receiver(extern_clinic_data: dict) -> None:
 
         if row_count > 0:
             for row in range(row_count):
-                phone_number = grid_pattern.GetItem(row, 4).Name
+                phone_number = grid_pattern.GetItem(row, 5).Name
                 if phone_number == clinic_phone_number:
                     grid_pattern.GetItem(row, 0).Click(simulateMove=False, waitTime=0)
                     break
@@ -348,8 +348,6 @@ def edi_portal_add_content(
     body = edi_portal_content["body"]
     if not body:
         raise ValueError("Body is required.")
-
-    # TODO: Check with Sara for what the message should contain.
 
     examination_date = _get_formatted_date(data=queue_element)
     # risk_profile_map = {0: "Grøn", 1: "Gul", 2: "Rød", 3: "Ukendt"}
@@ -523,8 +521,8 @@ def _find_latest_matching_row(grid_pattern, subject: str) -> int | None:
     latest_date = None
 
     for row in range(1, row_count):
-        message = grid_pattern.GetItem(row, 5).Name or ""
-        date_str = grid_pattern.GetItem(row, 1).Name or ""
+        message = grid_pattern.GetItem(row, 6).Name or ""
+        date_str = grid_pattern.GetItem(row, 2).Name or ""
 
         if subject != message:
             continue
@@ -757,8 +755,8 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
 
         if row_count > 0:
             for row in range(1, row_count):
-                message = grid_pattern.GetItem(row, 5).Name or ""
-                date_str = grid_pattern.GetItem(row, 1).Name or ""
+                message = grid_pattern.GetItem(row, 6).Name or ""
+                date_str = grid_pattern.GetItem(row, 2).Name or ""
 
                 print(f"Row {row}: message='{message}', date='{date_str}'")
 

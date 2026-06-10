@@ -28,6 +28,7 @@ class PatientContext:
     patient_cpr: str = ""
     patient_name: str = ""
     request_number: str = ""
+    clinic_name: str = ""
     tandplejeplan: bool = False
     regionstilsagn: bool = False
 
@@ -137,5 +138,6 @@ class PatientContext:
             request_number=item_data.get("requestNumberServiceNow", ""),
             tandplejeplan=item_data.get("tandplejeplan", False),
             regionstilsagn=item_data.get("regionstilsagn", False),
+            clinic_name=item_data.get("klinik_navn", False),
             is_under_16=is_under_16(cleaned_cpr) if cleaned_cpr else False,
         )

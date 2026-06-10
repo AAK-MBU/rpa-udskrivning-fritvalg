@@ -14,6 +14,7 @@ from src.steps.solteq_open_patient_journal import open_patient
 from src.steps.solteq_start_app import start_solteq
 from src.steps.store_edi_receipt import store_edi_receipt
 from src.steps.update_patient_info import update_patient_info
+from src.steps.update_private_clinic import update_private_clinic
 
 __all__ = [
     "create_administrative_note",
@@ -30,4 +31,5 @@ __all__ = [
     "start_solteq",
     "store_edi_receipt",
     "update_patient_info",
+    "update_private_clinic",
 ]
