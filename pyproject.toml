@@ -1,15 +1,15 @@
 [project]
 name = "rpa-udskrivning-fritvalg"
 version = "0.0.2"
-description = "Udskrivning 0-14 år - Frit valg"
+description = "Udskrivning - Frit valg"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "automation-server-client @ git+https://github.com/odense-rpa/automation-server-client.git",
-    "aak-mbu-integration-romexis @ git+https://github.com/AAK-MBU/aak-mbu-integration-romexis.git@f7faa44",
-    "mbu-solteqtand-shared-components",
-    "mbu-rpa-core>=0.2.5",
-    "mbu-process-dashboard-shared-components==1.5.0",
+    "aak-mbu-integration-romexis @ git+https://github.com/AAK-MBU/aak-mbu-integration-romexis.git@main",
+    "mbu-solteqtand-shared-components @ git+https://github.com/AAK-MBU/MBU_SolteqTand_Shared_Components.git@main",
+    "mbu-rpa-core @ git+https://github.com/AAK-MBU/MBU-rpa-core.git@main",
+    "mbu-process-dashboard-shared-components @ git+https://github.com/AAK-MBU/MBU_Process_Dashboard_Shared_Components.git@main",
     "pillow",
     "ruff",
     "tzdata",
