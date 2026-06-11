@@ -65,9 +65,6 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         # Step 4: Update patient journal data.
         steps.update_patient_info(runner, app, ctx)
 
-        # Step 4.5: Update private clinic
-        steps.update_private_clinic(runner, app, ctx)
-
         # Step 5: Check if patient has a specific event, if so, process it.
         steps.process_event(runner, app, solteq_db_obj, ctx)
 
