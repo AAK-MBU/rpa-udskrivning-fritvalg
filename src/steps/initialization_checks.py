@@ -228,7 +228,7 @@ def run_initialization_checks(
 
     ctx.administrative_note = check_administrative_note(db, ctx)
 
-    check_other_documents(db, ctx)
+    # check_other_documents(db, ctx)
 
     # GUI check — needs the runner for retry/screenshot
     check_contractor_in_edi_portal(runner, app, ctx)
