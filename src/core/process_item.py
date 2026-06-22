@@ -78,14 +78,16 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         steps.send_discharge_document(runner, app, solteq_db_obj, ctx)
 
         # Step 9: Get images from Romexis and create zip file.
-        romexis_db_conn = os.getenv("ROMEXIS_DB_CONNSTR", "")
-        steps.get_romexis_images(runner, romexis_db_conn, ctx)
+        if ctx.consent:
+            romexis_db_conn = os.getenv("ROMEXIS_DB_CONNSTR", "")
+            steps.get_romexis_images(runner, romexis_db_conn, ctx)
 
         # Step 10: Create digital journal; Check if exists, if not, create it.
         steps.create_medical_record(runner, app, solteq_db_obj, ctx)
 
         # Step 11: Get all other relevant documents
-        steps.prepare_edi_documents(runner, solteq_db_obj, ctx)
+        if ctx.consent:
+            steps.prepare_edi_documents(runner, solteq_db_obj, ctx)
 
         # Step 12: Send journal and images trough EDI Portal
         rpa_db_conn = os.getenv("RPA_DB_CONNSTR", "")
@@ -95,7 +97,6 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         steps.store_edi_receipt(runner, app, solteq_db_obj, ctx)
 
         # Step 14: Create administrativ note
-        # TODO: Fix picking the correct journal in the drop down when creating a note
         steps.create_administrative_note(runner, app, solteq_db_obj, ctx)
 
         handle_process_dashboard(

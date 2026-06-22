@@ -29,6 +29,7 @@ class EdiContext:
         path_to_files_for_upload (str): Path to the files that need to be uploaded.
         subject (str): Subject of the context. Defaults to an empty string.
         receipt_path (Optional[str]): Path to the receipt file. Defaults to None.
+        consent (bool): Whether the patient has given consent to upload files.
     """
 
     extern_clinic_data: dict[str, Any]
@@ -38,6 +39,7 @@ class EdiContext:
     journal_note: str | None = None
     value_data: dict[str, Any] | None = None
     receipt_path: str | None = None
+    consent: bool
 
 
 # A pipeline step is any callable that receives the context and operates on it
@@ -146,8 +148,12 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         ),
         lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # File upload
-        lambda ctxt: edifuncs.edi_portal_upload_files(
-            path_to_files=ctxt.path_to_files_for_upload
+        lambda ctxt: (
+            edifuncs.edi_portal_upload_files(
+                path_to_files=ctxt.path_to_files_for_upload
+            )
+            if ctxt.consent
+            else None
         ),
         lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # Priority & send
