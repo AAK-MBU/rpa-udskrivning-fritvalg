@@ -31,6 +31,7 @@ class PatientContext:
     clinic_name: str = ""
     tandplejeplan: bool = False
     regionstilsagn: bool = False
+    consent: bool = False
 
     # Collected during initialization checks
     primary_clinic_data: list = field(default_factory=list)
@@ -140,4 +141,5 @@ class PatientContext:
             regionstilsagn=item_data.get("regionstilsagn", False),
             clinic_name=item_data.get("klinik_navn", False),
             is_under_16=is_under_16(cleaned_cpr) if cleaned_cpr else False,
+            consent=item_data.get("journal_samtykke", False),
         )
