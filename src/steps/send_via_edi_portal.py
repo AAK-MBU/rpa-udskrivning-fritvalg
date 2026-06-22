@@ -126,6 +126,7 @@ def _run_edi_pipeline(
         queue_element=queue_element,
         path_to_files_for_upload=ctx.edi_portal_file_paths,
         journal_note=ctx.journal_note_text,
+        consent=ctx.consent,
     )
 
     # Open portal
