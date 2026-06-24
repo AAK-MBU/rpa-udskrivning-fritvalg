@@ -490,8 +490,8 @@ dependencies = [
 
 [[package]]
 name = "mbu-solteqtand-shared-components"
-version = "2.0.6"
-source = { git = "https://github.com/AAK-MBU/MBU_SolteqTand_Shared_Components.git?rev=main#b72a516aec0e43ad8f533858ce82665d56cda0df" }
+version = "2.0.9"
+source = { git = "https://github.com/AAK-MBU/MBU_SolteqTand_Shared_Components.git?rev=main#8faec6aa08dea555f09c9fad0eb9558d9056d4b5" }
 dependencies = [
     { name = "cryptography" },
     { name = "dotenv" },
