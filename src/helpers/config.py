@@ -18,4 +18,4 @@ TMP_FOLDER = "C:\\tmp\\tmt"
 # Process dashboard
 # ----------------------
 PROCESS_NAME = "Frit valg"
-PROCESS_STEP_NAME = "Journalmateriale sendt og journaliseret"
+PROCESS_STEP_NAME = "Besked til privat tandklinik afsendt og journaliseret"
