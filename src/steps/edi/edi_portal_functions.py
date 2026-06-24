@@ -253,6 +253,7 @@ def edi_portal_lookup_contractor_id(extern_clinic_data: dict) -> None:
         search_box_value_pattern = search_box.GetPattern(auto.PatternId.ValuePattern)
         search_box_value_pattern.SetValue(contractor_id)
         search_box.SendKeys("{ENTER}")
+        time.sleep(5)
     except Exception as e:
         print(f"Error while looking up contractor ID in EDI Portal: {e}")
         raise
@@ -282,12 +283,18 @@ def edi_portal_choose_receiver(extern_clinic_data: dict) -> None:
         grid_pattern = table_dentists.GetPattern(auto.PatternId.GridPattern)
         row_count = grid_pattern.RowCount
 
+        print(f"[DEBUG] clinic_phone_number='{clinic_phone_number}', row_count={row_count}")
+
         if row_count > 0:
             for row in range(row_count):
                 phone_number = grid_pattern.GetItem(row, 5).Name
+                print(f"[DEBUG] row={row}, col5='{phone_number}'")
                 if phone_number == clinic_phone_number:
                     grid_pattern.GetItem(row, 0).Click(simulateMove=False, waitTime=0)
+                    print(f"[DEBUG] Clicked row {row}")
                     break
+            else:
+                print("[DEBUG] No matching phone number found — checkbox not clicked")
     except Exception as e:
         print(f"Error while choosing receiver in EDI Portal: {e}")
         raise

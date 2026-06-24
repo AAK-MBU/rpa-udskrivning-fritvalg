@@ -39,6 +39,9 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         ProcessError: If an automation step fails after retries (item is failed).
     """
 
+    raw_cpr = item_data.get("patient_cpr") or item_data.get("cpr", "")
+    cpr = raw_cpr.replace("-", "")
+
     runner = AutomationRunner(name=f"Process-{item_reference}")
     try:
         release_keys()
@@ -61,6 +64,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         handle_process_dashboard(
             status="running",
             process_step_name=config.PROCESS_STEP_NAME,
+            cpr=cpr,
         )
 
         # Step 4: Update patient journal data.
@@ -91,7 +95,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
             steps.prepare_edi_documents(runner, solteq_db_obj, ctx)
 
         # Step 12: Send journal and images trough EDI Portal
-        rpa_db_conn = os.getenv("RPA_DB_CONNSTR", "")
+        rpa_db_conn = os.getenv("DBCONNECTIONSTRINGPROD", "")
         steps.send_via_edi_portal(runner, app, rpa_db_conn, ctx)
 
         # Step 13: Download receipt PDF from EDI Portal and store in Solteq
@@ -103,12 +107,14 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         handle_process_dashboard(
             status="success",
             process_step_name=config.PROCESS_STEP_NAME,
+            cpr=cpr,
         )
     except BusinessError as be:
         logger.error("Business error occurred: %s", be)
         handle_process_dashboard(
             status="failed",
             process_step_name=config.PROCESS_STEP_NAME,
+            cpr=cpr,
             failure=be,
             rerun_config={"workitem_id": item_id},
         )
@@ -118,6 +124,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         handle_process_dashboard(
             status="failed",
             process_step_name=config.PROCESS_STEP_NAME,
+            cpr=cpr,
             failure=e,
         )
         raise
