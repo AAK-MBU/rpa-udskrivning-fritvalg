@@ -184,7 +184,9 @@ def edi_portal_click_next_button(sleep_time: int) -> None:
         )
 
         edge_window.SetFocus()
-        print("[DEBUG] edi_portal_click_next_button: Edge window found, searching for Næste button...")
+        print(
+            "[DEBUG] edi_portal_click_next_button: Edge window found, searching for Næste button..."
+        )
 
         try:
             next_button = wait_for_control(
@@ -194,7 +196,9 @@ def edi_portal_click_next_button(sleep_time: int) -> None:
             next_button = None
 
         if not next_button:
-            print("[DEBUG] edi_portal_click_next_button: Næste not found by name, trying AutomationId...")
+            print(
+                "[DEBUG] edi_portal_click_next_button: Næste not found by name, trying AutomationId..."
+            )
             try:
                 next_button = wait_for_control(
                     edge_window.ButtonControl,
@@ -207,7 +211,9 @@ def edi_portal_click_next_button(sleep_time: int) -> None:
 
         if not next_button:
             raise RuntimeError("Next button not found in EDI Portal")
-        print(f"[DEBUG] edi_portal_click_next_button: clicking button, then sleeping {sleep_time}s...")
+        print(
+            f"[DEBUG] edi_portal_click_next_button: clicking button, then sleeping {sleep_time}s..."
+        )
         next_button.Click(simulateMove=False, waitTime=0)
         time.sleep(sleep_time)
         print("[DEBUG] edi_portal_click_next_button: done.")
@@ -636,7 +642,9 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
 
         # Step 1: hover over the row center to ensure the ... button is rendered
         row_center_x = (table_rect.left + table_rect.right) // 2
-        print(f"[DEBUG] hovering row center at ({row_center_x}, {row_y}) to trigger ... button")
+        print(
+            f"[DEBUG] hovering row center at ({row_center_x}, {row_y}) to trigger ... button"
+        )
         auto.MoveTo(row_center_x, row_y, moveSpeed=0.5, waitTime=0)
         time.sleep(0.5)
 
@@ -655,7 +663,11 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
         table_children = table_post_messages.GetChildren()
         print(f"[DEBUG] table has {len(table_children)} children")
         # children[0] = header row, data rows start at [1]
-        target_row_ctrl = table_children[latest_matching_row] if latest_matching_row < len(table_children) else None
+        target_row_ctrl = (
+            table_children[latest_matching_row]
+            if latest_matching_row < len(table_children)
+            else None
+        )
         print(f"[DEBUG] target_row_ctrl={target_row_ctrl}")
 
         dots_button = _find_first_button(target_row_ctrl) if target_row_ctrl else None
@@ -668,7 +680,9 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
         else:
             # Fallback: midpoint between cell right and table right
             fallback_x = (row_rect.right + table_rect.right) // 2
-            print(f"[DEBUG] button not found in tree, fallback hover at ({fallback_x}, {row_y})")
+            print(
+                f"[DEBUG] button not found in tree, fallback hover at ({fallback_x}, {row_y})"
+            )
             auto.MoveTo(fallback_x, row_y, moveSpeed=0.5, waitTime=0)
         time.sleep(1)
 
@@ -678,8 +692,13 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
                 return None
             try:
                 name = ctrl.Name or ""
-                if name.strip() in ("Gem", "◄ Gem") and ctrl.ControlType != auto.ControlType.DocumentControl:
-                    print(f"[DEBUG] found Gem: type={ctrl.ControlType} name='{name}' class='{ctrl.ClassName}'")
+                if (
+                    name.strip() in ("Gem", "◄ Gem")
+                    and ctrl.ControlType != auto.ControlType.DocumentControl
+                ):
+                    print(
+                        f"[DEBUG] found Gem: type={ctrl.ControlType} name='{name}' class='{ctrl.ClassName}'"
+                    )
                     return ctrl
             except Exception:
                 pass
@@ -787,7 +806,9 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         except ValueError:
             return None
 
-    print(f"[DEBUG] edi_portal_is_patient_data_sent: checking if already sent for subject='{subject}'")
+    print(
+        f"[DEBUG] edi_portal_is_patient_data_sent: checking if already sent for subject='{subject}'"
+    )
     try:
         url_field = wait_for_control(
             auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
@@ -795,7 +816,9 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Messages/Sent")
         url_field.SendKeys("{ENTER}")
-        print("[DEBUG] edi_portal_is_patient_data_sent: navigating to Sent page, sleeping 5s...")
+        print(
+            "[DEBUG] edi_portal_is_patient_data_sent: navigating to Sent page, sleeping 5s..."
+        )
         time.sleep(5)
 
         test = wait_for_control(
@@ -854,9 +877,13 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
                     f"Message contains '{subject}' but date {parsed_date} is not older than 1 month"
                 )
 
-        print(f"[DEBUG] edi_portal_is_patient_data_sent: success_message={success_message}")
+        print(
+            f"[DEBUG] edi_portal_is_patient_data_sent: success_message={success_message}"
+        )
         if success_message:
-            print("[DEBUG] edi_portal_is_patient_data_sent: already sent → returning True")
+            print(
+                "[DEBUG] edi_portal_is_patient_data_sent: already sent → returning True"
+            )
             return True
 
         print("[DEBUG] edi_portal_is_patient_data_sent: not sent → returning False")

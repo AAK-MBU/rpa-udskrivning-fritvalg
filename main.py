@@ -19,6 +19,7 @@ from src.helpers import ats_functions, config
 
 logger = logging.getLogger(__name__)
 
+
 async def populate_queue(workqueue: Workqueue):
     """Populate the workqueue with items to be processed."""
 

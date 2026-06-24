@@ -197,7 +197,9 @@ def edi_portal_handler(context: EdiContext) -> str | None:
 
     # Execute each step in sequence
     skip_steps = False
-    for i, step in enumerate(pipeline[:-2]):  # Exclude the last two steps from conditional skipping
+    for i, step in enumerate(
+        pipeline[:-2]
+    ):  # Exclude the last two steps from conditional skipping
         name = step_names[i] if i < len(step_names) else f"step_{i}"
         try:
             logger.info("[EDI] Step %d/%d: %s", i + 1, len(pipeline) - 2, name)
@@ -207,7 +209,10 @@ def edi_portal_handler(context: EdiContext) -> str | None:
 
             result = step(context)
             if result:
-                logger.info("[EDI] %s returned True — skipping remaining steps until last two.", name)
+                logger.info(
+                    "[EDI] %s returned True — skipping remaining steps until last two.",
+                    name,
+                )
                 skip_steps = True
             else:
                 logger.info("[EDI] %s done.", name)
