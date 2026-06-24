@@ -432,7 +432,7 @@ def edi_portal_upload_files(path_to_files: str) -> None:
     upload_field.Click(simulateMove=False, waitTime=0)
 
     upload_dialog = wait_for_control(
-        auto.WindowControl, {"Name": "Open"}, search_depth=5
+        auto.WindowControl, {"Name": "Åbn"}, search_depth=5
     )
 
     upload_dialog_path_field = wait_for_control(
