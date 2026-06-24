@@ -164,5 +164,9 @@ cython_debug/
 # Screensshots
 screenshots/*
 
+# Browser GPU cache (created by Edge when running EDI portal automation)
+GPUCache/
+@AutomationLog.txt
+
 # Test
 tests/auto/*
