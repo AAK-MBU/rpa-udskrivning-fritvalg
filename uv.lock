@@ -499,6 +499,13 @@ dependencies = [
     { name = "python-dateutil" },
 ]
 
+[package.optional-dependencies]
+application = [
+    { name = "docx2pdf" },
+    { name = "psutil" },
+    { name = "uiautomation" },
+]
+
 [[package]]
 name = "msal"
 version = "1.37.0"
@@ -997,7 +1004,7 @@ dependencies = [
     { name = "automation-server-client" },
     { name = "mbu-process-dashboard-shared-components" },
     { name = "mbu-rpa-core" },
-    { name = "mbu-solteqtand-shared-components" },
+    { name = "mbu-solteqtand-shared-components", extra = ["application"] },
     { name = "pillow" },
     { name = "ruff" },
     { name = "tzdata" },
@@ -1024,7 +1031,7 @@ requires-dist = [
     { name = "docx2pdf", marker = "extra == 'dev'" },
     { name = "mbu-process-dashboard-shared-components", git = "https://github.com/AAK-MBU/MBU_Process_Dashboard_Shared_Components.git?rev=main" },
     { name = "mbu-rpa-core", git = "https://github.com/AAK-MBU/MBU-rpa-core.git?rev=main" },
-    { name = "mbu-solteqtand-shared-components", git = "https://github.com/AAK-MBU/MBU_SolteqTand_Shared_Components.git?rev=main" },
+    { name = "mbu-solteqtand-shared-components", extras = ["application"], git = "https://github.com/AAK-MBU/MBU_SolteqTand_Shared_Components.git?rev=main" },
     { name = "pillow" },
     { name = "psutil", marker = "extra == 'dev'" },
     { name = "pytest", marker = "extra == 'dev'" },

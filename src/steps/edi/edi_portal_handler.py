@@ -35,11 +35,11 @@ class EdiContext:
     extern_clinic_data: dict[str, Any]
     queue_element: dict[str, Any]
     path_to_files_for_upload: str
+    consent: bool
     subject: str | None = None
     journal_note: str | None = None
     value_data: dict[str, Any] | None = None
     receipt_path: str | None = None
-    consent: bool
 
 
 # A pipeline step is any callable that receives the context and operates on it
