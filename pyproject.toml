@@ -13,6 +13,7 @@ dependencies = [
     "pillow",
     "ruff",
     "tzdata",
+    "uiautomation",
 ]
 
 [tool.uv.sources]
