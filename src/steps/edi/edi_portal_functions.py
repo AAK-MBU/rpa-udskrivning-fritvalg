@@ -283,7 +283,9 @@ def edi_portal_choose_receiver(extern_clinic_data: dict) -> None:
         grid_pattern = table_dentists.GetPattern(auto.PatternId.GridPattern)
         row_count = grid_pattern.RowCount
 
-        print(f"[DEBUG] clinic_phone_number='{clinic_phone_number}', row_count={row_count}")
+        print(
+            f"[DEBUG] clinic_phone_number='{clinic_phone_number}', row_count={row_count}"
+        )
 
         if row_count > 0:
             for row in range(row_count):
