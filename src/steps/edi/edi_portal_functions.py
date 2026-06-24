@@ -177,12 +177,14 @@ def edi_portal_click_next_button(sleep_time: int) -> None:
     Args:
         sleep_time (int): Time to wait after clicking the next button.
     """
+    print("[DEBUG] edi_portal_click_next_button: searching for Edge window...")
     try:
         edge_window = wait_for_control(
             auto.WindowControl, {"ClassName": "Chrome_WidgetWin_1"}, search_depth=3
         )
 
         edge_window.SetFocus()
+        print("[DEBUG] edi_portal_click_next_button: Edge window found, searching for Næste button...")
 
         try:
             next_button = wait_for_control(
@@ -192,6 +194,7 @@ def edi_portal_click_next_button(sleep_time: int) -> None:
             next_button = None
 
         if not next_button:
+            print("[DEBUG] edi_portal_click_next_button: Næste not found by name, trying AutomationId...")
             try:
                 next_button = wait_for_control(
                     edge_window.ButtonControl,
@@ -204,8 +207,10 @@ def edi_portal_click_next_button(sleep_time: int) -> None:
 
         if not next_button:
             raise RuntimeError("Next button not found in EDI Portal")
+        print(f"[DEBUG] edi_portal_click_next_button: clicking button, then sleeping {sleep_time}s...")
         next_button.Click(simulateMove=False, waitTime=0)
         time.sleep(sleep_time)
+        print("[DEBUG] edi_portal_click_next_button: done.")
     except Exception as e:
         print(f"Error while clicking next button in EDI Portal: {e}")
         raise
@@ -427,7 +432,7 @@ def edi_portal_upload_files(path_to_files: str) -> None:
     upload_field.Click(simulateMove=False, waitTime=0)
 
     upload_dialog = wait_for_control(
-        auto.WindowControl, {"Name": "Åbn"}, search_depth=5
+        auto.WindowControl, {"Name": "Open"}, search_depth=5
     )
 
     upload_dialog_path_field = wait_for_control(
@@ -622,25 +627,82 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
             raise RuntimeError("Message not sent.")
 
         print(f"Using latest matching row {latest_matching_row}")
-        menu_button = grid_pattern.GetItem(latest_matching_row, 9)
-        menu_button.Click(simulateMove=False, waitTime=0)
-        time.sleep(3)
 
-        menu_popup = _get_receipt_download_menu(root_web_area)
-        menu_popup_item = wait_for_control(
-            menu_popup.ListItemControl,
-            {"Name": " Gem"},
-            search_depth=50,
-        )
-        menu_popup_item.SetFocus()
-        pos = menu_popup_item.GetClickablePoint()
+        # Get the row's Y coordinate from the grid cell (any column works for Y)
+        row_cell = grid_pattern.GetItem(latest_matching_row, 0)
+        table_rect = table_post_messages.BoundingRectangle
+        row_rect = row_cell.BoundingRectangle
+        row_y = (row_rect.top + row_rect.bottom) // 2
+
+        # Step 1: hover over the row center to ensure the ... button is rendered
+        row_center_x = (table_rect.left + table_rect.right) // 2
+        print(f"[DEBUG] hovering row center at ({row_center_x}, {row_y}) to trigger ... button")
+        auto.MoveTo(row_center_x, row_y, moveSpeed=0.5, waitTime=0)
+        time.sleep(0.5)
+
+        # Step 2: find the ... button via proper tree traversal (not column index)
+        def _find_first_button(ctrl, max_depth=10):
+            if max_depth <= 0:
+                return None
+            for child in ctrl.GetChildren():
+                if child.ControlType == auto.ControlType.ButtonControl:
+                    return child
+                found = _find_first_button(child, max_depth - 1)
+                if found:
+                    return found
+            return None
+
+        table_children = table_post_messages.GetChildren()
+        print(f"[DEBUG] table has {len(table_children)} children")
+        # children[0] = header row, data rows start at [1]
+        target_row_ctrl = table_children[latest_matching_row] if latest_matching_row < len(table_children) else None
+        print(f"[DEBUG] target_row_ctrl={target_row_ctrl}")
+
+        dots_button = _find_first_button(target_row_ctrl) if target_row_ctrl else None
+        print(f"[DEBUG] dots_button via tree={dots_button}")
+
+        if dots_button:
+            dots_pos = dots_button.GetClickablePoint()
+            print(f"[DEBUG] moving to ... button at {dots_pos}")
+            auto.MoveTo(dots_pos[0], dots_pos[1], moveSpeed=0.5, waitTime=0)
+        else:
+            # Fallback: midpoint between cell right and table right
+            fallback_x = (row_rect.right + table_rect.right) // 2
+            print(f"[DEBUG] button not found in tree, fallback hover at ({fallback_x}, {row_y})")
+            auto.MoveTo(fallback_x, row_y, moveSpeed=0.5, waitTime=0)
+        time.sleep(1)
+
+        # Find "Gem" item — control type unknown, search recursively by name
+        def _find_gem_item(ctrl, depth=0, max_depth=15):
+            if depth > max_depth:
+                return None
+            try:
+                name = ctrl.Name or ""
+                if name.strip() in ("Gem", "◄ Gem") and ctrl.ControlType != auto.ControlType.DocumentControl:
+                    print(f"[DEBUG] found Gem: type={ctrl.ControlType} name='{name}' class='{ctrl.ClassName}'")
+                    return ctrl
+            except Exception:
+                pass
+            for child in ctrl.GetChildren():
+                result = _find_gem_item(child, depth + 1, max_depth)
+                if result:
+                    return result
+            return None
+
+        gem_item = _find_gem_item(root_web_area)
+        if gem_item is None:
+            raise RuntimeError("Could not find 'Gem' item in the dropdown")
+        pos = gem_item.GetClickablePoint()
+        print(f"[DEBUG] hovering Gem item at {pos}")
         auto.MoveTo(pos[0], pos[1], moveSpeed=0.5, waitTime=0)
-        menu_popup_item_save = wait_for_control(
-            menu_popup.HyperlinkControl,
+        time.sleep(1)
+
+        gem_som_pdf = wait_for_control(
+            root_web_area.HyperlinkControl,
             {"Name": "Gem som PDF"},
             search_depth=50,
         )
-        menu_popup_item_save.Click(simulateMove=False, waitTime=0)
+        gem_som_pdf.Click(simulateMove=False, waitTime=0)
 
         return _wait_for_receipt_download()
 
@@ -725,14 +787,15 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         except ValueError:
             return None
 
+    print(f"[DEBUG] edi_portal_is_patient_data_sent: checking if already sent for subject='{subject}'")
     try:
         url_field = wait_for_control(
-            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
+            auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
         )
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Messages/Sent")
         url_field.SendKeys("{ENTER}")
-
+        print("[DEBUG] edi_portal_is_patient_data_sent: navigating to Sent page, sleeping 5s...")
         time.sleep(5)
 
         test = wait_for_control(
@@ -760,7 +823,7 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         #             break
 
         # Define one month ago here
-        one_month_ago = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
+        one_month_ago = datetime.now(UTC) - timedelta(days=30)
 
         if row_count > 0:
             for row in range(1, row_count):
@@ -791,13 +854,15 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
                     f"Message contains '{subject}' but date {parsed_date} is not older than 1 month"
                 )
 
-        print(f"{success_message=}")
+        print(f"[DEBUG] edi_portal_is_patient_data_sent: success_message={success_message}")
         if success_message:
-            print("Message has already been sent.")
+            print("[DEBUG] edi_portal_is_patient_data_sent: already sent → returning True")
             return True
 
+        print("[DEBUG] edi_portal_is_patient_data_sent: not sent → returning False")
         return False
     except TimeoutError:
+        print("[DEBUG] edi_portal_is_patient_data_sent: TimeoutError → returning False")
         return False
     except Exception as e:
         print(f"Error while checking if patient data is sent in EDI Portal: {e}")
@@ -810,11 +875,14 @@ def edi_portal_go_to_send_journal() -> None:
     """
     try:
         url_field = wait_for_control(
-            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
+            auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
         )
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Journal/Create")
         url_field.SendKeys("{ENTER}")
+        print("[DEBUG] edi_portal_go_to_send_journal: navigating, sleeping 5s...")
+        time.sleep(5)
+        print("[DEBUG] edi_portal_go_to_send_journal: done.")
     except Exception as e:
         print(f"Error while navigating to 'Send journal' in EDI Portal: {e}")
         raise

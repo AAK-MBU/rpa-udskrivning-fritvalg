@@ -1,0 +1,13 @@
+2026-06-24 17:00:27.164 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {Name: 'Adresse- og søgelinje', ControlType: EditControl}
+2026-06-24 17:00:42.255 edi_portal_functions.py[42] wait_for_control -> 2026-06-24 17:03:33.352 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {Name: 'Adresse- og søgelinje', ControlType: EditControl}
+2026-06-24 17:03:44.793 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {Name: 'Adresse- og søgelinje', ControlType: EditControl}
+2026-06-24 17:03:56.238 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {Name: 'Adresse- og søgelinje', ControlType: EditControl}
+2026-06-24 17:04:08.948 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {Name: 'Adresse- og søgelinje', ControlType: EditControl}
+2026-06-24 17:14:27.949 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {Name: 'Åbn', ControlType: WindowControl}
+2026-06-24 17:20:20.862 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {Name: 'En eller flere filer er under behandling. Du kan fortsætte til næste trin, når arbejdet er færdigt.', ControlType: TextControl}
+2026-06-24 17:22:42.799 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {ClassName: 'dropdown-menu show', ControlType: ListControl}
+2026-06-24 17:22:53.553 edi_portal_functions.py[42] wait_for_control -> 2026-06-24 17:35:08.368 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {ClassName: 'dropdown-menu show', ControlType: ListControl}
+2026-06-24 17:39:41.061 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {ClassName: 'dropdown-menu show', ControlType: ListControl}
+2026-06-24 17:39:51.738 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {ClassName: 'dropdown-menu show', ControlType: ListControl}
+2026-06-24 17:44:30.287 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {Name: ' Gem', ControlType: ListItemControl}
+2026-06-24 17:52:52.701 edi_portal_functions.py[42] wait_for_control -> Find Control Timeout(10s): {Name: ' Gem', ControlType: ListItemControl}
