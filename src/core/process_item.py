@@ -38,13 +38,9 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         BusinessError: If business validation fails (item goes to pending_user).
         ProcessError: If an automation step fails after retries (item is failed).
     """
+
     runner = AutomationRunner(name=f"Process-{item_reference}")
     try:
-        handle_process_dashboard(
-            status="running",
-            process_step_name=config.PROCESS_STEP_NAME,
-        )
-
         release_keys()
 
         # Step 1: Open Solteq application and log in.
@@ -61,6 +57,11 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
             os.getenv("DBCONNECTIONSTRINGSOLTEQTAND", "")
         )
         ctx = steps.run_initialization_checks(runner, app, solteq_db_obj, item_data)
+
+        handle_process_dashboard(
+            status="running",
+            process_step_name=config.PROCESS_STEP_NAME,
+        )
 
         # Step 4: Update patient journal data.
         steps.update_patient_info(runner, app, ctx)
