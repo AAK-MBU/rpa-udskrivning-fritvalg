@@ -85,7 +85,7 @@ def close():
         from src.helpers.clean_up import kill_adobe, kill_msedge
 
         kill_adobe()
-        kill_msedge()
+        # kill_msedge()
     logger.info("Finished closing applications.")
 
 
