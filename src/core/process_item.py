@@ -76,32 +76,26 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         # Step 6: Create booking reminder; Check if exists, if not, create it.
         steps.create_booking_reminders(runner, app, solteq_db_obj, ctx)
 
-        # Step 7: Create discharge document; Check if exists, if not, create it.
-        steps.create_discharge_document(runner, app, solteq_db_obj, ctx)
-
-        # Step 8: Send discharge document; Check if has been send, if not, send it.
-        steps.send_discharge_document(runner, app, solteq_db_obj, ctx)
-
-        # Step 9: Get images from Romexis and create zip file.
+        # Step 7: Get images from Romexis and create zip file.
         if ctx.consent:
             romexis_db_conn = os.getenv("ROMEXIS_DB_CONNSTR", "")
             steps.get_romexis_images(runner, romexis_db_conn, ctx)
 
-        # Step 10: Create digital journal; Check if exists, if not, create it.
+        # Step 8: Create digital journal; Check if exists, if not, create it.
         steps.create_medical_record(runner, app, solteq_db_obj, ctx)
 
-        # Step 11: Get all other relevant documents
+        # Step 9: Get all other relevant documents
         if ctx.consent:
             steps.prepare_edi_documents(runner, solteq_db_obj, ctx)
 
-        # Step 12: Send journal and images trough EDI Portal
+        # Step 10: Send journal and images trough EDI Portal
         rpa_db_conn = os.getenv("DBCONNECTIONSTRINGPROD", "")
         steps.send_via_edi_portal(runner, app, rpa_db_conn, ctx)
 
-        # Step 13: Download receipt PDF from EDI Portal and store in Solteq
+        # Step 11: Download receipt PDF from EDI Portal and store in Solteq
         steps.store_edi_receipt(runner, app, solteq_db_obj, ctx)
 
-        # Step 14: Create administrativ note
+        # Step 12: Create administrativ note
         steps.create_administrative_note(runner, app, solteq_db_obj, ctx)
 
         handle_process_dashboard(
