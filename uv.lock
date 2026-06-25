@@ -997,7 +997,7 @@ wheels = [
 
 [[package]]
 name = "rpa-udskrivning-fritvalg"
-version = "0.2.0"
+version = "1.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "aak-mbu-integration-romexis" },
@@ -1006,6 +1006,7 @@ dependencies = [
     { name = "mbu-rpa-core" },
     { name = "mbu-solteqtand-shared-components", extra = ["application"] },
     { name = "pillow" },
+    { name = "rawpy" },
     { name = "ruff" },
     { name = "tzdata" },
     { name = "uiautomation" },
@@ -1038,6 +1039,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "pytest-timeout", marker = "extra == 'dev'" },
     { name = "python-dotenv", marker = "extra == 'dev'" },
+    { name = "rawpy" },
     { name = "rawpy", marker = "extra == 'dev'" },
     { name = "ruff" },
     { name = "ruff", marker = "extra == 'dev'" },

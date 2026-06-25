@@ -1,6 +1,6 @@
 [project]
 name = "rpa-udskrivning-fritvalg"
-version = "1.0.0"
+version = "1.1.0"
 description = "Udskrivning - Frit valg"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -11,6 +11,7 @@ dependencies = [
     "mbu-rpa-core @ git+https://github.com/AAK-MBU/MBU-rpa-core.git@main",
     "mbu-process-dashboard-shared-components @ git+https://github.com/AAK-MBU/MBU_Process_Dashboard_Shared_Components.git@main",
     "pillow",
+    "rawpy",
     "ruff",
     "tzdata",
     "uiautomation",

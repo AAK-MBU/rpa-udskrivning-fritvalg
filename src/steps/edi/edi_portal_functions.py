@@ -680,16 +680,19 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
         else:
             # Fallback: midpoint between cell right and table right
             fallback_x = (row_rect.right + table_rect.right) // 2
+            dots_pos = (fallback_x, row_y)
             print(
                 f"[DEBUG] button not found in tree, fallback hover at ({fallback_x}, {row_y})"
             )
             auto.MoveTo(fallback_x, row_y, moveSpeed=0.5, waitTime=0)
-        time.sleep(1)
+        time.sleep(0.5)
 
-        # Find the "Gem" HyperlinkControl (the <a> tag, not the list item).
-        # The list item's name is ' GemGem som PDFHent...' (concatenated children),
-        # so GetClickablePoint() on it would be displaced. The hyperlink child has
-        # the exact bounding rect of just the "Gem" text.
+        # The "Gem" HyperlinkControl is only in the UIA tree when the mouse physically
+        # hovers over it. The action dropdown doesn't appear as a ListControl while
+        # hovering the ... button — items only materialise when hovered directly.
+        # Strategy: scan downward from dots_pos in small steps. CSS hover keeps the
+        # dropdown open as the mouse moves through it, so we stop as soon as we find
+        # the "Gem" hyperlink in the tree.
         def _find_gem_hyperlink(ctrl, depth=0, max_depth=15):
             if depth > max_depth:
                 return None
@@ -708,26 +711,190 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
                     return result
             return None
 
-        gem_link = _find_gem_hyperlink(root_web_area)
-        if gem_link is None:
-            raise RuntimeError("Could not find 'Gem' hyperlink in the dropdown")
-        pos = gem_link.GetClickablePoint()
-        print(f"[DEBUG] hovering Gem hyperlink at {pos}")
-        auto.MoveTo(pos[0], pos[1], moveSpeed=0.5, waitTime=0)
-        time.sleep(1)
+        # The dropdown opens to the LEFT of the ... button.
+        # Phase 1: scan left from dots_pos until we detect we're inside the dropdown
+        # (any nearby hyperlink becomes visible in the UIA tree).
+        # Phase 2: from that x position, scan downward to find "Gem".
+        def _find_any_nearby_hyperlink(ctrl, dots_x, dots_y, depth=0, max_depth=15):
+            """Return any HyperlinkControl that is spatially within the dropdown area."""
+            if depth > max_depth:
+                return None
+            try:
+                if ctrl.ControlType == auto.ControlType.HyperlinkControl:
+                    rect = ctrl.BoundingRectangle
+                    if (
+                        dots_x - 500 < rect.left < dots_x
+                        and dots_y - 50 < rect.top < dots_y + 500
+                        and rect.width > 0
+                        and rect.height > 0
+                    ):
+                        return ctrl
+            except Exception:
+                pass
+            for child in ctrl.GetChildren():
+                result = _find_any_nearby_hyperlink(child, dots_x, dots_y, depth + 1, max_depth)
+                if result:
+                    return result
+            return None
 
-        # Click Gem som PDF via UIA (simulateMove=False = position-independent)
-        gem_som_pdf = wait_for_control(
-            root_web_area.HyperlinkControl,
-            {"Name": "Gem som PDF"},
-            search_depth=50,
+        gem_link = None
+
+        # APPROACH 1: check the ... button's parent/ancestor tree for a ListControl sibling.
+        # Accessibility Insights showed the dropdown as: group > [button "", list ""].
+        # We walk up a few ancestor levels and print every child for debug.
+        print(f"[DEBUG] Approach 1: inspecting button ancestor tree for ListControl sibling")
+        gem_item_rect = None
+        gem_list_item = None
+        ancestor = dots_button.GetParentControl()
+        for level in range(4):
+            if ancestor is None:
+                print(f"[DEBUG]   level {level}: ancestor is None, stopping")
+                break
+            try:
+                children = ancestor.GetChildren()
+            except Exception as exc:
+                print(f"[DEBUG]   level {level}: GetChildren failed: {exc}")
+                break
+            print(
+                f"[DEBUG]   level {level}: ancestor type={ancestor.ControlType}, "
+                f"rect={ancestor.BoundingRectangle}, children={len(children)}"
+            )
+            for child in children:
+                print(
+                    f"[DEBUG]     child type={child.ControlType}, "
+                    f"name={repr(child.Name)}, rect={child.BoundingRectangle}"
+                )
+                if child.ControlType == auto.ControlType.ListControl:
+                    print(f"[DEBUG]     ^ ListControl found at level {level}")
+                    for item in child.GetChildren():
+                        item_name = (item.Name or "").strip()
+                        print(f"[DEBUG]       list item: {repr(item_name)}, rect={item.BoundingRectangle}")
+                        if "Gem" in item_name and "PDF" not in item_name:
+                            gem_item_rect = item.BoundingRectangle
+                            gem_list_item = item
+                            print(f"[DEBUG]       ^ matched 'Gem' item")
+                    break
+            if gem_item_rect:
+                break
+            ancestor = ancestor.GetParentControl()
+
+        def _find_control_by_name(ctrl, name, depth=0, max_depth=20):
+            """Find any UIA control whose Name matches, regardless of ControlType."""
+            if depth > max_depth:
+                return None
+            try:
+                if (ctrl.Name or "").strip() == name:
+                    print(
+                        f"[DEBUG]   found {repr(name)}: type={ctrl.ControlType}, "
+                        f"rect={ctrl.BoundingRectangle}"
+                    )
+                    return ctrl
+            except Exception:
+                pass
+            for child in ctrl.GetChildren():
+                result = _find_control_by_name(child, name, depth + 1, max_depth)
+                if result:
+                    return result
+            return None
+
+        def _click_gem_som_pdf(label):
+            """Search tree for 'Gem som PDF' and click it. Returns True on success."""
+            ctrl = _find_control_by_name(root_web_area, "Gem som PDF")
+            if ctrl:
+                print(f"[DEBUG] {label}: clicking 'Gem som PDF' rect={ctrl.BoundingRectangle}")
+                ctrl.Click(simulateMove=False, waitTime=0)
+                return True
+            print(f"[DEBUG] {label}: 'Gem som PDF' not in tree")
+            return False
+
+        # APPROACH 1: sibling ListControl found — use the saved gem_list_item reference
+        # directly instead of scanning for a 'Gem' HyperlinkControl (which never appears
+        # in the tree; the ListItemControl IS the accessible element).
+        if gem_item_rect and gem_list_item is not None:
+            # 1a — hover the left text area of the item and wait for a possible submenu
+            text_x = gem_item_rect.left + 20
+            text_y = (gem_item_rect.top + gem_item_rect.bottom) // 2
+            print(f"[DEBUG] Approach 1a: moving to Gem text area ({text_x}, {text_y})")
+            auto.MoveTo(text_x, text_y, moveSpeed=0.3, waitTime=0)
+            time.sleep(1.0)
+            if _click_gem_som_pdf("Approach 1a — hover"):
+                return _wait_for_receipt_download()
+
+            # 1b — maybe a 'Gem' hyperlink appeared after hover (historical behaviour)
+            gem_link_now = _find_gem_hyperlink(root_web_area)
+            if gem_link_now:
+                pos = gem_link_now.GetClickablePoint()
+                print(f"[DEBUG] Approach 1b: 'Gem' hyperlink appeared, moving to {pos}")
+                auto.MoveTo(pos[0], pos[1], moveSpeed=0.3, waitTime=0)
+                time.sleep(0.5)
+                if _click_gem_som_pdf("Approach 1b — after Gem hyperlink hover"):
+                    return _wait_for_receipt_download()
+
+            # 1c — invoke the Gem ListItemControl via UIA (no physical mouse movement)
+            print(f"[DEBUG] Approach 1c: InvokePattern on Gem ListItemControl")
+            try:
+                gem_list_item.GetInvokePattern().Invoke()
+                time.sleep(0.5)
+                if _click_gem_som_pdf("Approach 1c — after InvokePattern"):
+                    return _wait_for_receipt_download()
+            except Exception as exc:
+                print(f"[DEBUG] Approach 1c: InvokePattern raised {exc}")
+
+            # 1d — UIA Click on the Gem ListItemControl (no physical mouse movement)
+            print(f"[DEBUG] Approach 1d: Click(simulateMove=False) on Gem ListItemControl")
+            try:
+                gem_list_item.Click(simulateMove=False, waitTime=0)
+                time.sleep(0.5)
+                if _click_gem_som_pdf("Approach 1d — after ListItem click"):
+                    return _wait_for_receipt_download()
+            except Exception as exc:
+                print(f"[DEBUG] Approach 1d: Click raised {exc}")
+
+            print(f"[DEBUG] Approach 1: all sub-approaches exhausted, falling through to Approach 2")
+
+        # APPROACH 2: 2D scan — try positions to the left of and around the ... button.
+        # Items only appear as hyperlinks in the UIA tree when the mouse physically
+        # hovers over the element text.
+        gem_link = None
+        print(f"[DEBUG] Approach 2: starting 2D scan. dots_pos={dots_pos}")
+        y_offsets = []
+        for step in range(0, 250, 20):
+            y_offsets.append(step)
+            if step != 0:
+                y_offsets.append(-step)
+
+        for x_offset in range(50, 450, 50):
+            scan_x = dots_pos[0] - x_offset
+            for y_off in y_offsets:
+                scan_y = dots_pos[1] + y_off
+                auto.MoveTo(scan_x, scan_y, moveSpeed=0, waitTime=0)
+                time.sleep(0.1)
+                gem_link = _find_gem_hyperlink(root_web_area)
+                if gem_link:
+                    print(
+                        f"[DEBUG] Approach 2: 'Gem' hyperlink at ({scan_x}, {scan_y}) "
+                        f"x_offset={x_offset}, y_offset={y_off}"
+                    )
+                    break
+                print(f"[DEBUG] Approach 2: ({scan_x}, {scan_y}) — no match yet")
+            if gem_link:
+                break
+
+        if gem_link is not None:
+            pos = gem_link.GetClickablePoint()
+            print(f"[DEBUG] Approach 2: Gem hyperlink clickable point: {pos}")
+            auto.MoveTo(pos[0], pos[1], moveSpeed=0.3, waitTime=0)
+            time.sleep(0.5)
+            if _click_gem_som_pdf("Approach 2 — after Gem hyperlink hover"):
+                return _wait_for_receipt_download()
+
+        # Final fallback: the dropdown may still be visible from a prior hover
+        if _click_gem_som_pdf("Approach 2 — direct search after full scan"):
+            return _wait_for_receipt_download()
+
+        raise RuntimeError(
+            "Could not find 'Gem som PDF' — see [DEBUG] logs for dropdown structure"
         )
-
-        print(f"[DEBUG] clicking Gem som PDF: rect={gem_som_pdf.BoundingRectangle}")
-
-        gem_som_pdf.Click(simulateMove=False, waitTime=0)
-
-        return _wait_for_receipt_download()
 
     except Exception as e:
         print(f"Error while downloading the receipt from EDI Portal: {e}")
