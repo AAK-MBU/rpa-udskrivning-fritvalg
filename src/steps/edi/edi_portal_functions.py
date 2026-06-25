@@ -686,41 +686,45 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
             auto.MoveTo(fallback_x, row_y, moveSpeed=0.5, waitTime=0)
         time.sleep(1)
 
-        # Find "Gem" item — control type unknown, search recursively by name
-        def _find_gem_item(ctrl, depth=0, max_depth=15):
+        # Find the "Gem" HyperlinkControl (the <a> tag, not the list item).
+        # The list item's name is ' GemGem som PDFHent...' (concatenated children),
+        # so GetClickablePoint() on it would be displaced. The hyperlink child has
+        # the exact bounding rect of just the "Gem" text.
+        def _find_gem_hyperlink(ctrl, depth=0, max_depth=15):
             if depth > max_depth:
                 return None
             try:
-                name = ctrl.Name or ""
                 if (
-                    name.strip() in ("Gem", "◄ Gem")
-                    and ctrl.ControlType != auto.ControlType.DocumentControl
+                    ctrl.ControlType == auto.ControlType.HyperlinkControl
+                    and (ctrl.Name or "").strip() == "Gem"
                 ):
-                    print(
-                        f"[DEBUG] found Gem: type={ctrl.ControlType} name='{name}' class='{ctrl.ClassName}'"
-                    )
+                    print(f"[DEBUG] found Gem hyperlink: rect={ctrl.BoundingRectangle}")
                     return ctrl
             except Exception:
                 pass
             for child in ctrl.GetChildren():
-                result = _find_gem_item(child, depth + 1, max_depth)
+                result = _find_gem_hyperlink(child, depth + 1, max_depth)
                 if result:
                     return result
             return None
 
-        gem_item = _find_gem_item(root_web_area)
-        if gem_item is None:
-            raise RuntimeError("Could not find 'Gem' item in the dropdown")
-        pos = gem_item.GetClickablePoint()
-        print(f"[DEBUG] hovering Gem item at {pos}")
+        gem_link = _find_gem_hyperlink(root_web_area)
+        if gem_link is None:
+            raise RuntimeError("Could not find 'Gem' hyperlink in the dropdown")
+        pos = gem_link.GetClickablePoint()
+        print(f"[DEBUG] hovering Gem hyperlink at {pos}")
         auto.MoveTo(pos[0], pos[1], moveSpeed=0.5, waitTime=0)
         time.sleep(1)
 
+        # Click Gem som PDF via UIA (simulateMove=False = position-independent)
         gem_som_pdf = wait_for_control(
             root_web_area.HyperlinkControl,
             {"Name": "Gem som PDF"},
             search_depth=50,
         )
+
+        print(f"[DEBUG] clicking Gem som PDF: rect={gem_som_pdf.BoundingRectangle}")
+
         gem_som_pdf.Click(simulateMove=False, waitTime=0)
 
         return _wait_for_receipt_download()
