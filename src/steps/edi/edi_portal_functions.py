@@ -1,13 +1,12 @@
+# ruff: noqa: PLR0912, PLR0915
 """
 This module contains functions to interact with the EDI portal.
 These functions should be moved to mbu_dev_shared_components/solteqtand/application/edi_portal.py
 """
 
-import locale
-import re
 import time
 from contextlib import suppress
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pyodbc
@@ -314,7 +313,6 @@ def edi_portal_choose_receiver(extern_clinic_data: dict) -> None:
 
 
 def edi_portal_add_content(
-    queue_element: dict,
     edi_portal_content: dict,
     extern_clinic_data: dict,
     journal_continuation_text: str | None = None,
@@ -327,30 +325,6 @@ def edi_portal_add_content(
         edi_portal_content (dict): The content template for the EDI portal.
         journal_continuation_text (str | None): Additional text to be added to the content.
     """
-
-    def _get_formatted_date(data) -> str:
-        """
-        Helper function to format the date from the data dictionary.
-        Args:
-            data (dict): The data dictionary containing the date information.
-        Returns:
-            str: The formatted date string or an error message.
-        """
-        try:
-            locale.setlocale(locale.LC_TIME, "da_DK.UTF-8")
-        except locale.Error:
-            return "Error setting locale to Danish"
-
-        if data.get("ukendt_dato") is True:
-            return "Ukendt"
-
-        try:
-            date_str = data["dateOfExamination"]
-            year, month, day = date_str.split("-")
-            date_obj = date(int(year), int(month), int(day))
-            return date_obj.strftime("%B %Y").capitalize()
-        except (ValueError, KeyError):
-            return "Error parsing date"
 
     subject = edi_portal_content["subject"]
 
@@ -369,38 +343,21 @@ def edi_portal_add_content(
     if not body:
         raise ValueError("Body is required.")
 
-    examination_date = _get_formatted_date(data=queue_element)
-    # risk_profile_map = {0: "Grøn", 1: "Gul", 2: "Rød", 3: "Ukendt"}
-    # risc_profile = risk_profile_map.get(queue_element.get("riskProfil"))
-    dental_plan = queue_element.get("tandplejeplan", "Ukendt")
-
-    body_modified = re.sub(r"@examinationDate", examination_date, body)
-    # body_modified = re.sub(r"@riscProfile", risc_profile, body_modified)
+    prefix = "Besked til privat tandklinik - Frit valg: "
+    note_text = ""
     if journal_continuation_text:
-        if "Besked til privat tandlæge - Frit valg: " in journal_continuation_text:
-            journal_continuation_text = journal_continuation_text.replace(
-                "Besked til privat tandlæge - Frit valg: ", ""
-            )
-        elif (
-            "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: "
-            in journal_continuation_text
-        ):
-            journal_continuation_text = journal_continuation_text.replace(
-                "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: ",
-                "",
-            )
+        if journal_continuation_text.startswith(prefix):
+            note_text = journal_continuation_text[len(prefix) :]
+        else:
+            note_text = journal_continuation_text
 
-    if dental_plan:
-        body_modified = re.sub(
-            r"@dentalPlan",
-            f"Anden information: {journal_continuation_text}",
-            body_modified,
-        )
-    else:
-        body_modified = re.sub(r"@dentalPlan", "", body_modified)
+    body_modified = body.replace(
+        "Næste undersøgelse: @examinationDate\nRisikoprofil: @riscProfile\n@dentalPlan",
+        note_text,
+    )
 
     # Truncate body to 31150 characters to fit EDI portal limitations
-    body_modified = body[:31150]
+    body_modified = body_modified[:31150]
 
     try:
         root_web_area = wait_for_control(
@@ -732,7 +689,9 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
             except Exception:
                 pass
             for child in ctrl.GetChildren():
-                result = _find_any_nearby_hyperlink(child, dots_x, dots_y, depth + 1, max_depth)
+                result = _find_any_nearby_hyperlink(
+                    child, dots_x, dots_y, depth + 1, max_depth
+                )
                 if result:
                     return result
             return None
@@ -742,7 +701,9 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
         # APPROACH 1: check the ... button's parent/ancestor tree for a ListControl sibling.
         # Accessibility Insights showed the dropdown as: group > [button "", list ""].
         # We walk up a few ancestor levels and print every child for debug.
-        print(f"[DEBUG] Approach 1: inspecting button ancestor tree for ListControl sibling")
+        print(
+            "[DEBUG] Approach 1: inspecting button ancestor tree for ListControl sibling"
+        )
         gem_item_rect = None
         gem_list_item = None
         ancestor = dots_button.GetParentControl()
@@ -768,11 +729,13 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
                     print(f"[DEBUG]     ^ ListControl found at level {level}")
                     for item in child.GetChildren():
                         item_name = (item.Name or "").strip()
-                        print(f"[DEBUG]       list item: {repr(item_name)}, rect={item.BoundingRectangle}")
+                        print(
+                            f"[DEBUG]       list item: {repr(item_name)}, rect={item.BoundingRectangle}"
+                        )
                         if "Gem" in item_name and "PDF" not in item_name:
                             gem_item_rect = item.BoundingRectangle
                             gem_list_item = item
-                            print(f"[DEBUG]       ^ matched 'Gem' item")
+                            print("[DEBUG]       ^ matched 'Gem' item")
                     break
             if gem_item_rect:
                 break
@@ -801,7 +764,9 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
             """Search tree for 'Gem som PDF' and click it. Returns True on success."""
             ctrl = _find_control_by_name(root_web_area, "Gem som PDF")
             if ctrl:
-                print(f"[DEBUG] {label}: clicking 'Gem som PDF' rect={ctrl.BoundingRectangle}")
+                print(
+                    f"[DEBUG] {label}: clicking 'Gem som PDF' rect={ctrl.BoundingRectangle}"
+                )
                 ctrl.Click(simulateMove=False, waitTime=0)
                 return True
             print(f"[DEBUG] {label}: 'Gem som PDF' not in tree")
@@ -831,7 +796,7 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
                     return _wait_for_receipt_download()
 
             # 1c — invoke the Gem ListItemControl via UIA (no physical mouse movement)
-            print(f"[DEBUG] Approach 1c: InvokePattern on Gem ListItemControl")
+            print("[DEBUG] Approach 1c: InvokePattern on Gem ListItemControl")
             try:
                 gem_list_item.GetInvokePattern().Invoke()
                 time.sleep(0.5)
@@ -841,7 +806,9 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
                 print(f"[DEBUG] Approach 1c: InvokePattern raised {exc}")
 
             # 1d — UIA Click on the Gem ListItemControl (no physical mouse movement)
-            print(f"[DEBUG] Approach 1d: Click(simulateMove=False) on Gem ListItemControl")
+            print(
+                "[DEBUG] Approach 1d: Click(simulateMove=False) on Gem ListItemControl"
+            )
             try:
                 gem_list_item.Click(simulateMove=False, waitTime=0)
                 time.sleep(0.5)
@@ -850,7 +817,9 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
             except Exception as exc:
                 print(f"[DEBUG] Approach 1d: Click raised {exc}")
 
-            print(f"[DEBUG] Approach 1: all sub-approaches exhausted, falling through to Approach 2")
+            print(
+                "[DEBUG] Approach 1: all sub-approaches exhausted, falling through to Approach 2"
+            )
 
         # APPROACH 2: 2D scan — try positions to the left of and around the ... button.
         # Items only appear as hyperlinks in the UIA tree when the mouse physically

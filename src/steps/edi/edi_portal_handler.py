@@ -141,7 +141,6 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # Add journal content
         lambda ctxt: edifuncs.edi_portal_add_content(
-            queue_element=ctxt.queue_element,
             edi_portal_content=ctxt.value_data["edi_portal_content"],
             journal_continuation_text=ctxt.journal_note,
             extern_clinic_data=ctxt.extern_clinic_data,
@@ -159,9 +158,9 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         # Priority & send
         # lambda ctxt: edifuncs.edi_portal_choose_priority(),
         lambda _: edifuncs.edi_portal_click_next_button(sleep_time=10),
-        lambda _: time.sleep(10),
+        lambda _: time.sleep(5),
         lambda _: edifuncs.edi_portal_send_message(),
-        # # Retrieve the sent receipt
+        # Retrieve the sent receipt
         lambda ctxt: setattr(
             ctxt,
             "receipt_path",

@@ -23,18 +23,18 @@ DEFAULT_CLINIC_NAME = "Tandplejen Aarhus"
 DEFAULT_CLINICIAN_NAME = " Frit valg"
 
 
-def _get_age_based_values(ctx: PatientContext) -> tuple[str, str]:
+def _get_age_based_values(ctx: PatientContext) -> str:
     """Determine status and document filename based on patient age.
 
     Args:
         ctx: The patient context with is_under_16 already set.
 
     Returns:
-        Tuple of (status, discharge_document_filename).
+        str
     """
     if ctx.is_under_16:
-        return "Frit valg 0-15 år", "Udskrivning til privat praksis 0-15 år"
-    return "Frit valg fra 16 år", "Udskrivning til privat praksis fra 16 år"
+        return "Frit valg 0-15 år"
+    return "Frit valg fra 16 år"
 
 
 def update_patient_info(
@@ -45,15 +45,13 @@ def update_patient_info(
     """Update patient status, primary clinic, and primary dentist.
 
     Only updates fields that differ from the expected defaults.
-    Stores the discharge document filename on ctx for later steps.
 
     Args:
         runner: The automation runner managing this process.
         app: The logged-in SolteqTandApp instance.
         ctx: The patient context with initialization data populated.
     """
-    status, discharge_filename = _get_age_based_values(ctx)
-    ctx.discharge_document_filename = discharge_filename
+    status = _get_age_based_values(ctx)
 
     # Update status if needed
     if ctx.patient_status != status:
@@ -109,4 +107,4 @@ def update_patient_info(
             DEFAULT_CLINICIAN_NAME,
         )
 
-    logger.info("Patient info updated. Discharge document: %s", discharge_filename)
+    logger.info("Patient info updated.")
