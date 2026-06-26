@@ -12,6 +12,8 @@ from pathlib import Path
 import pyodbc
 import uiautomation as auto
 
+from src.helpers.clean_up import kill_adobe
+
 
 def wait_for_control(
     control_type, search_params, search_depth=1, timeout=30, retry_interval=0.5
@@ -549,7 +551,7 @@ def _wait_for_receipt_download(timeout: int = 60) -> Path:
     """Poll the Downloads folder until a Meddelelse*.pdf appears."""
 
     time.sleep(5)
-
+    kill_adobe()
     download_path = Path.home() / "Downloads"
     start_time = time.time()
 
