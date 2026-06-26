@@ -86,17 +86,17 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         # Step 8: Download receipt PDF from EDI Portal and store in Solteq
         steps.store_edi_receipt(runner, app, solteq_db_obj, ctx)
 
-        # Step 9: Create administrativ note
-        steps.create_administrative_note(runner, app, solteq_db_obj, ctx)
-
-        # Step 10: Update patient journal data.
+        # Step 9: Update patient journal data.
         steps.update_patient_info(runner, app, ctx)
 
-        # Step 11: Check if patient has a specific event, if so, process it.
+        # Step 10: Check if patient has a specific event, if so, process it.
         steps.process_event(runner, app, solteq_db_obj, ctx)
 
-        # Step 12: Create booking reminder; Check if exists, if not, create it.
+        # Step 11: Create booking reminder; Check if exists, if not, create it.
         steps.create_booking_reminders(runner, app, solteq_db_obj, ctx)
+
+        # Step 12: Create administrativ note
+        steps.create_administrative_note(runner, app, solteq_db_obj, ctx)
 
         handle_process_dashboard(
             status="success",
