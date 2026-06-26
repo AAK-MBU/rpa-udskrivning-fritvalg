@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 #     return _old_request(self, *args, **kwargs)
 # requests.Session.request = unsafe_request
 
+
 async def populate_queue(workqueue: Workqueue):
     """Populate the workqueue with items to be processed."""
 
