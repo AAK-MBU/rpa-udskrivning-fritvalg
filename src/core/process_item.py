@@ -67,33 +67,33 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
             cpr=cpr,
         )
 
-        # Step 4: Check if patient has a specific event, if so, process it.
-        steps.process_event(runner, app, solteq_db_obj, ctx)
-
-        # Step 5: Get images from Romexis and create zip file.
+        # Step 4: Get images from Romexis and create zip file.
         if ctx.consent:
             romexis_db_conn = os.getenv("ROMEXIS_DB_CONNSTR", "")
             steps.get_romexis_images(runner, romexis_db_conn, ctx)
 
-        # Step 6: Create digital journal; Check if exists, if not, create it.
+        # Step 5: Create digital journal; Check if exists, if not, create it.
         steps.create_medical_record(runner, app, solteq_db_obj, ctx)
 
-        # Step 7: Get all other relevant documents
+        # Step 6: Get all other relevant documents
         if ctx.consent:
             steps.prepare_edi_documents(runner, solteq_db_obj, ctx)
 
-        # Step 8: Send journal and images trough EDI Portal
+        # Step 7: Send journal and images trough EDI Portal
         rpa_db_conn = os.getenv("DBCONNECTIONSTRINGPROD", "")
         steps.send_via_edi_portal(runner, app, rpa_db_conn, ctx)
 
-        # Step 9: Download receipt PDF from EDI Portal and store in Solteq
+        # Step 8: Download receipt PDF from EDI Portal and store in Solteq
         steps.store_edi_receipt(runner, app, solteq_db_obj, ctx)
 
-        # Step 10: Create administrativ note
+        # Step 9: Create administrativ note
         steps.create_administrative_note(runner, app, solteq_db_obj, ctx)
 
-        # Step 11: Update patient journal data.
+        # Step 10: Update patient journal data.
         steps.update_patient_info(runner, app, ctx)
+
+        # Step 11: Check if patient has a specific event, if so, process it.
+        steps.process_event(runner, app, solteq_db_obj, ctx)
 
         # Step 12: Create booking reminder; Check if exists, if not, create it.
         steps.create_booking_reminders(runner, app, solteq_db_obj, ctx)
