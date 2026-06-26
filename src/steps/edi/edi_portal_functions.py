@@ -563,7 +563,6 @@ def _wait_for_receipt_download(timeout: int = 60) -> Path:
     )
 
 
-
 def edi_portal_get_journal_sent_receip(subject: str) -> str:
     """
     Checks if the message was sent successfully in the EDI portal,
@@ -952,7 +951,7 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
     )
     try:
         url_field = wait_for_control(
-            auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
+            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
         )
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Messages/Sent")
@@ -1043,7 +1042,7 @@ def edi_portal_go_to_send_journal() -> None:
     """
     try:
         url_field = wait_for_control(
-            auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
+            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
         )
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Journal/Create")
