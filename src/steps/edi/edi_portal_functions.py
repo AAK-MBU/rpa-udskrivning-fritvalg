@@ -547,6 +547,9 @@ def _get_receipt_download_menu(root_web_area) -> object:
 
 def _wait_for_receipt_download(timeout: int = 60) -> Path:
     """Poll the Downloads folder until a Meddelelse*.pdf appears."""
+
+    time.sleep(5)
+
     download_path = Path.home() / "Downloads"
     start_time = time.time()
 
