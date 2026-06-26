@@ -124,6 +124,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         )
         raise
     finally:
+        app.close_patient_window()
         clean_up_download_folder()
         clean_up_tmp_folder()
         logger.info(runner.summary())
