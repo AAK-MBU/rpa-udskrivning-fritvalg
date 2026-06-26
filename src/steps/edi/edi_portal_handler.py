@@ -159,9 +159,9 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         # Priority & send
         # lambda ctxt: edifuncs.edi_portal_choose_priority(),
         lambda _: edifuncs.edi_portal_click_next_button(sleep_time=10),
-        lambda _: time.sleep(10),
+        lambda _: time.sleep(5),
         lambda _: edifuncs.edi_portal_send_message(),
-        # # Retrieve the sent receipt
+        # Retrieve the sent receipt
         lambda ctxt: setattr(
             ctxt,
             "receipt_path",

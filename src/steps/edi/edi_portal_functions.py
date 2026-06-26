@@ -328,30 +328,6 @@ def edi_portal_add_content(
         journal_continuation_text (str | None): Additional text to be added to the content.
     """
 
-    def _get_formatted_date(data) -> str:
-        """
-        Helper function to format the date from the data dictionary.
-        Args:
-            data (dict): The data dictionary containing the date information.
-        Returns:
-            str: The formatted date string or an error message.
-        """
-        try:
-            locale.setlocale(locale.LC_TIME, "da_DK.UTF-8")
-        except locale.Error:
-            return "Error setting locale to Danish"
-
-        if data.get("ukendt_dato") is True:
-            return "Ukendt"
-
-        try:
-            date_str = data["dateOfExamination"]
-            year, month, day = date_str.split("-")
-            date_obj = date(int(year), int(month), int(day))
-            return date_obj.strftime("%B %Y").capitalize()
-        except (ValueError, KeyError):
-            return "Error parsing date"
-
     subject = edi_portal_content["subject"]
 
     if not subject:
@@ -369,38 +345,21 @@ def edi_portal_add_content(
     if not body:
         raise ValueError("Body is required.")
 
-    examination_date = _get_formatted_date(data=queue_element)
-    # risk_profile_map = {0: "Grøn", 1: "Gul", 2: "Rød", 3: "Ukendt"}
-    # risc_profile = risk_profile_map.get(queue_element.get("riskProfil"))
-    dental_plan = queue_element.get("tandplejeplan", "Ukendt")
-
-    body_modified = re.sub(r"@examinationDate", examination_date, body)
-    # body_modified = re.sub(r"@riscProfile", risc_profile, body_modified)
+    prefix = "Besked til privat tandklinik - Frit valg: "
+    note_text = ""
     if journal_continuation_text:
-        if "Besked til privat tandlæge - Frit valg: " in journal_continuation_text:
-            journal_continuation_text = journal_continuation_text.replace(
-                "Besked til privat tandlæge - Frit valg: ", ""
-            )
-        elif (
-            "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: "
-            in journal_continuation_text
-        ):
-            journal_continuation_text = journal_continuation_text.replace(
-                "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: ",
-                "",
-            )
+        if journal_continuation_text.startswith(prefix):
+            note_text = journal_continuation_text[len(prefix):]
+        else:
+            note_text = journal_continuation_text
 
-    if dental_plan:
-        body_modified = re.sub(
-            r"@dentalPlan",
-            f"Anden information: {journal_continuation_text}",
-            body_modified,
-        )
-    else:
-        body_modified = re.sub(r"@dentalPlan", "", body_modified)
+    body_modified = body.replace(
+        "Næste undersøgelse: @examinationDate\nRisikoprofil: @riscProfile\n@dentalPlan",
+        note_text,
+    )
 
     # Truncate body to 31150 characters to fit EDI portal limitations
-    body_modified = body[:31150]
+    body_modified = body_modified[:31150]
 
     try:
         root_web_area = wait_for_control(
@@ -982,7 +941,7 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
     )
     try:
         url_field = wait_for_control(
-            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
+            auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
         )
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Messages/Sent")
@@ -1073,7 +1032,7 @@ def edi_portal_go_to_send_journal() -> None:
     """
     try:
         url_field = wait_for_control(
-            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
+            auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
         )
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Journal/Create")
