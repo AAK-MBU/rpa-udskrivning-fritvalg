@@ -23,12 +23,23 @@ from src.core.step_configs import StepConfig
 
 logger = logging.getLogger(__name__)
 
-JOURNAL_NOTE = (
-    "Administrativt notat 'Udskrivning til frit valg gennemført af robot. "
+NOTE_TYPE = "Administrativt notat"
+
+# The note body, wrapped in single quotes as Solteq expects on input.
+NOTE_MESSAGE = (
+    "'Udskrivning til frit valg gennemført af robot. "
     "Sendt information til pt. og sendt journal og billedmateriale til "
     "privat tandlæge via EDI-portal. Se dokumentskab. "
     "Journal flyttet til Tandplejen Aarhus'"
 )
+
+# What we type into the journal note input box.
+JOURNAL_NOTE = f"{NOTE_TYPE} {NOTE_MESSAGE}"
+
+# What Solteq actually stores in dn.Beskrivelse: the note type prefix and
+# the wrapping single quotes are stripped away, so the DB lookup must match
+# only the inner text.
+NOTE_MESSAGE_DB_LOOKUP = NOTE_MESSAGE.replace("'", "")
 
 
 def _note_exists(db: SolteqTandDatabase, ctx: PatientContext) -> bool:
@@ -48,7 +59,7 @@ def _note_exists(db: SolteqTandDatabase, ctx: PatientContext) -> bool:
     result = db.get_list_of_journal_notes(
         filters={
             "p.cpr": ctx.patient_cpr,
-            "dn.Beskrivelse": f"%{JOURNAL_NOTE}%",
+            "dn.Beskrivelse": f"%{NOTE_MESSAGE_DB_LOOKUP}%",
             "ds.Dokumenteret": (">=", one_month_ago),
         },
         order_by="ds.Dokumenteret",
