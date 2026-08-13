@@ -32,7 +32,7 @@ def validate_cpr(cpr: str) -> str:
     cleaned = cpr.replace("-", "")
 
     if not cleaned.isdigit() or len(cleaned) != _CPR_LENGTH:
-        raise BusinessError(f"Invalid CPR number: {cpr}")
+        raise BusinessError("Invalid CPR number")
 
     return cleaned
 
@@ -52,7 +52,7 @@ def open_patient(runner: AutomationRunner, app: SolteqTandApp, cpr: str):
     cleaned_cpr = validate_cpr(cpr)
 
     runner.step(
-        f"Open patient {cleaned_cpr[:6]}-XXXX",
+        "Open patient",
         app.open_patient,
         cleaned_cpr,
         config=StepConfig(
@@ -65,16 +65,4 @@ def open_patient(runner: AutomationRunner, app: SolteqTandApp, cpr: str):
     # Register cleanup so patient window is closed if later steps fail
     runner.register_cleanup(app.close_patient_window)
 
-    logger.info("Patient window opened for CPR %s-XXXX.", cleaned_cpr[:6])
-
-
-def test_break_stuff(runner: AutomationRunner):
-    def raise_error():
-        logger.info("TAKE A SCREENSHOT OF ME!!! IM THE ERROR!!!!")
-        raise BusinessError("Breaking business stuff")
-
-    runner.step(
-        "Break stuff",
-        raise_error,
-        config=StepConfig(),
-    )
+    logger.info("Patient window opened")
