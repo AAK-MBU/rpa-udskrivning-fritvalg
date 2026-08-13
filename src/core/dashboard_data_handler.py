@@ -10,7 +10,6 @@ from mbu_process_dashboard_shared_components.process_dashboard_client import (
     ProcessDashboardClient,
 )
 
-from src.core.patient_context import PatientContext
 from src.helpers import config
 
 logger = logging.getLogger(__name__)
@@ -21,6 +20,7 @@ CLIENT = ProcessDashboardClient(api_admin_token=os.environ.get("API_ADMIN_TOKEN"
 def handle_process_dashboard(
     status: str,
     process_step_name: str,
+    cpr: str = "",
     failure: Exception | None = None,
     rerun_config: dict | None = None,
 ):
@@ -32,7 +32,7 @@ def handle_process_dashboard(
 
         status_update_data: dict[str, Any] = {"status": status}
 
-        citizen_cpr = PatientContext.patient_cpr
+        citizen_cpr = cpr
 
         logger.info("before get_step_run_id_for_process_step_cpr() ...")
 

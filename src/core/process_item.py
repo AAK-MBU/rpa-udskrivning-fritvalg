@@ -38,13 +38,12 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         BusinessError: If business validation fails (item goes to pending_user).
         ProcessError: If an automation step fails after retries (item is failed).
     """
+
+    raw_cpr = item_data.get("patient_cpr") or item_data.get("cpr", "")
+    cpr = raw_cpr.replace("-", "")
+
     runner = AutomationRunner(name=f"Process-{item_reference}")
     try:
-        handle_process_dashboard(
-            status="running",
-            process_step_name=config.PROCESS_STEP_NAME,
-        )
-
         release_keys()
 
         # Step 1: Open Solteq application and log in.
@@ -62,52 +61,55 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         )
         ctx = steps.run_initialization_checks(runner, app, solteq_db_obj, item_data)
 
-        # Step 4: Update patient journal data.
-        steps.update_patient_info(runner, app, ctx)
+        handle_process_dashboard(
+            status="running",
+            process_step_name=config.PROCESS_STEP_NAME,
+            cpr=cpr,
+        )
 
-        # Step 5: Check if patient has a specific event, if so, process it.
-        steps.process_event(runner, app, solteq_db_obj, ctx)
-
-        # Step 6: Create booking reminder; Check if exists, if not, create it.
-        steps.create_booking_reminders(runner, app, solteq_db_obj, ctx)
-
-        # Step 7: Create discharge document; Check if exists, if not, create it.
-        steps.create_discharge_document(runner, app, solteq_db_obj, ctx)
-
-        # Step 8: Send discharge document; Check if has been send, if not, send it.
-        steps.send_discharge_document(runner, app, solteq_db_obj, ctx)
-
-        # Step 9: Get images from Romexis and create zip file.
+        # Step 4: Get images from Romexis and create zip file.
         if ctx.consent:
             romexis_db_conn = os.getenv("ROMEXIS_DB_CONNSTR", "")
             steps.get_romexis_images(runner, romexis_db_conn, ctx)
 
-        # Step 10: Create digital journal; Check if exists, if not, create it.
+        # Step 5: Create digital journal; Check if exists, if not, create it.
         steps.create_medical_record(runner, app, solteq_db_obj, ctx)
 
-        # Step 11: Get all other relevant documents
+        # Step 6: Get all other relevant documents
         if ctx.consent:
             steps.prepare_edi_documents(runner, solteq_db_obj, ctx)
 
-        # Step 12: Send journal and images trough EDI Portal
-        rpa_db_conn = os.getenv("RPA_DB_CONNSTR", "")
+        # Step 7: Send journal and images trough EDI Portal
+        rpa_db_conn = os.getenv("DBCONNECTIONSTRINGPROD", "")
         steps.send_via_edi_portal(runner, app, rpa_db_conn, ctx)
 
-        # Step 13: Download receipt PDF from EDI Portal and store in Solteq
+        # Step 8: Download receipt PDF from EDI Portal and store in Solteq
         steps.store_edi_receipt(runner, app, solteq_db_obj, ctx)
 
-        # Step 14: Create administrativ note
+        # Step 9: Update patient journal data.
+        steps.update_patient_info(runner, app, ctx)
+
+        # Step 10: Check if patient has a specific event, if so, process it.
+        steps.process_event(runner, app, solteq_db_obj, ctx)
+
+        # Step 11: Create booking reminder; Check if exists, if not, create it.
+        steps.create_booking_reminders(runner, app, solteq_db_obj, ctx)
+
+        # Step 12: Create administrativ note
         steps.create_administrative_note(runner, app, solteq_db_obj, ctx)
 
         handle_process_dashboard(
             status="success",
             process_step_name=config.PROCESS_STEP_NAME,
+            cpr=cpr,
         )
+
     except BusinessError as be:
         logger.error("Business error occurred: %s", be)
         handle_process_dashboard(
             status="failed",
             process_step_name=config.PROCESS_STEP_NAME,
+            cpr=cpr,
             failure=be,
             rerun_config={"workitem_id": item_id},
         )
@@ -117,10 +119,13 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
         handle_process_dashboard(
             status="failed",
             process_step_name=config.PROCESS_STEP_NAME,
+            cpr=cpr,
             failure=e,
         )
         raise
     finally:
+        if app:
+            app.close_patient_window()
         clean_up_download_folder()
         clean_up_tmp_folder()
         logger.info(runner.summary())

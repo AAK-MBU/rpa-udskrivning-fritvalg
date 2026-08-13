@@ -88,7 +88,7 @@ def check_administrative_note(db: SolteqTandDatabase, ctx: PatientContext) -> li
     result = db.get_list_of_journal_notes(
         filters={
             "p.cpr": ctx.patient_cpr,
-            "dn.Beskrivelse": "%Besked til privat tandlæge - Frit valg%",
+            "dn.Beskrivelse": "%Besked til privat tandklinik - Frit valg%",
         },
         order_by="ds.Dokumenteret",
         order_direction="DESC",

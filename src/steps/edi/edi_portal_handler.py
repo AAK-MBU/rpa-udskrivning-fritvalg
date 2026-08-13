@@ -35,11 +35,11 @@ class EdiContext:
     extern_clinic_data: dict[str, Any]
     queue_element: dict[str, Any]
     path_to_files_for_upload: str
+    consent: bool
     subject: str | None = None
     journal_note: str | None = None
     value_data: dict[str, Any] | None = None
     receipt_path: str | None = None
-    consent: bool
 
 
 # A pipeline step is any callable that receives the context and operates on it
@@ -92,7 +92,7 @@ def edi_portal_handler(context: EdiContext) -> str | None:
 
         return {"name": row.name, "value": row.value}
 
-    conn_string = os.getenv("RPA_DB_CONNSTR", "")
+    conn_string = os.getenv("DBCONNECTIONSTRINGPROD", "")
     constant = get_constant(
         constant_name="udskrivning_edi_portal_content",
         conn_string=conn_string,
@@ -141,7 +141,6 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # Add journal content
         lambda ctxt: edifuncs.edi_portal_add_content(
-            queue_element=ctxt.queue_element,
             edi_portal_content=ctxt.value_data["edi_portal_content"],
             journal_continuation_text=ctxt.journal_note,
             extern_clinic_data=ctxt.extern_clinic_data,
@@ -158,10 +157,10 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # Priority & send
         # lambda ctxt: edifuncs.edi_portal_choose_priority(),
-        lambda _: edifuncs.edi_portal_click_next_button(sleep_time=60),
-        lambda _: time.sleep(60),
+        lambda _: edifuncs.edi_portal_click_next_button(sleep_time=10),
+        lambda _: time.sleep(5),
         lambda _: edifuncs.edi_portal_send_message(),
-        # # Retrieve the sent receipt
+        # Retrieve the sent receipt
         lambda ctxt: setattr(
             ctxt,
             "receipt_path",
@@ -179,31 +178,46 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         ),
     ]
 
+    step_names = [
+        "is_patient_data_sent",
+        "go_to_send_journal",
+        "click_next (page 1→2)",
+        "lookup_contractor_id",
+        "choose_receiver",
+        "click_next (page 2→3)",
+        "add_content",
+        "click_next (page 3→4)",
+        "upload_files",
+        "click_next (page 4→5)",
+        "click_next (page 5→send)",
+        "sleep_60",
+        "send_message",
+    ]
+
     # Execute each step in sequence
     skip_steps = False
-    for step in pipeline[:-2]:  # Exclude the last two steps from conditional skipping
+    for i, step in enumerate(
+        pipeline[:-2]
+    ):  # Exclude the last two steps from conditional skipping
+        name = step_names[i] if i < len(step_names) else f"step_{i}"
         try:
-            logger.info("Step: %s", step.__name__)
+            logger.info("[EDI] Step %d/%d: %s", i + 1, len(pipeline) - 2, name)
             if skip_steps:
-                logger.info("Skipping step due to earlier condition.")
+                logger.info("[EDI] Skipping %s (already sent).", name)
                 continue
 
-            if step(context):
+            result = step(context)
+            if result:
                 logger.info(
-                    "Step returned True, skipping remaining steps until the last two."
+                    "[EDI] %s returned True — skipping remaining steps until last two.",
+                    name,
                 )
                 skip_steps = True
             else:
-                logger.info("Step returned False, continuing.")
+                logger.info("[EDI] %s done.", name)
         except Exception as e:
-            logger.error(
-                "Step %s failed: %s",
-                step.__name__ if hasattr(step, "__name__") else step,
-                e,
-            )
-            raise RuntimeError(
-                f"Step {step.__name__ if hasattr(step, '__name__') else step} failed: {e}"
-            ) from e
+            logger.error("[EDI] Step %d (%s) failed: %s", i + 1, name, e)
+            raise RuntimeError(f"EDI step '{name}' failed: {e}") from e
 
     # Always run the last two steps
     for step in pipeline[-2:]:

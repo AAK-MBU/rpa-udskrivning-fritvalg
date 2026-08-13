@@ -1,17 +1,18 @@
+# ruff: noqa: PLR0912, PLR0915
 """
 This module contains functions to interact with the EDI portal.
 These functions should be moved to mbu_dev_shared_components/solteqtand/application/edi_portal.py
 """
 
-import locale
-import re
 import time
 from contextlib import suppress
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pyodbc
 import uiautomation as auto
+
+from src.helpers.clean_up import kill_adobe
 
 
 def wait_for_control(
@@ -177,12 +178,16 @@ def edi_portal_click_next_button(sleep_time: int) -> None:
     Args:
         sleep_time (int): Time to wait after clicking the next button.
     """
+    print("[DEBUG] edi_portal_click_next_button: searching for Edge window...")
     try:
         edge_window = wait_for_control(
             auto.WindowControl, {"ClassName": "Chrome_WidgetWin_1"}, search_depth=3
         )
 
         edge_window.SetFocus()
+        print(
+            "[DEBUG] edi_portal_click_next_button: Edge window found, searching for Næste button..."
+        )
 
         try:
             next_button = wait_for_control(
@@ -192,6 +197,9 @@ def edi_portal_click_next_button(sleep_time: int) -> None:
             next_button = None
 
         if not next_button:
+            print(
+                "[DEBUG] edi_portal_click_next_button: Næste not found by name, trying AutomationId..."
+            )
             try:
                 next_button = wait_for_control(
                     edge_window.ButtonControl,
@@ -204,8 +212,12 @@ def edi_portal_click_next_button(sleep_time: int) -> None:
 
         if not next_button:
             raise RuntimeError("Next button not found in EDI Portal")
+        print(
+            f"[DEBUG] edi_portal_click_next_button: clicking button, then sleeping {sleep_time}s..."
+        )
         next_button.Click(simulateMove=False, waitTime=0)
         time.sleep(sleep_time)
+        print("[DEBUG] edi_portal_click_next_button: done.")
     except Exception as e:
         print(f"Error while clicking next button in EDI Portal: {e}")
         raise
@@ -253,6 +265,7 @@ def edi_portal_lookup_contractor_id(extern_clinic_data: dict) -> None:
         search_box_value_pattern = search_box.GetPattern(auto.PatternId.ValuePattern)
         search_box_value_pattern.SetValue(contractor_id)
         search_box.SendKeys("{ENTER}")
+        time.sleep(5)
     except Exception as e:
         print(f"Error while looking up contractor ID in EDI Portal: {e}")
         raise
@@ -282,19 +295,26 @@ def edi_portal_choose_receiver(extern_clinic_data: dict) -> None:
         grid_pattern = table_dentists.GetPattern(auto.PatternId.GridPattern)
         row_count = grid_pattern.RowCount
 
+        print(
+            f"[DEBUG] clinic_phone_number='{clinic_phone_number}', row_count={row_count}"
+        )
+
         if row_count > 0:
             for row in range(row_count):
                 phone_number = grid_pattern.GetItem(row, 5).Name
+                print(f"[DEBUG] row={row}, col5='{phone_number}'")
                 if phone_number == clinic_phone_number:
                     grid_pattern.GetItem(row, 0).Click(simulateMove=False, waitTime=0)
+                    print(f"[DEBUG] Clicked row {row}")
                     break
+            else:
+                print("[DEBUG] No matching phone number found — checkbox not clicked")
     except Exception as e:
         print(f"Error while choosing receiver in EDI Portal: {e}")
         raise
 
 
 def edi_portal_add_content(
-    queue_element: dict,
     edi_portal_content: dict,
     extern_clinic_data: dict,
     journal_continuation_text: str | None = None,
@@ -307,30 +327,6 @@ def edi_portal_add_content(
         edi_portal_content (dict): The content template for the EDI portal.
         journal_continuation_text (str | None): Additional text to be added to the content.
     """
-
-    def _get_formatted_date(data) -> str:
-        """
-        Helper function to format the date from the data dictionary.
-        Args:
-            data (dict): The data dictionary containing the date information.
-        Returns:
-            str: The formatted date string or an error message.
-        """
-        try:
-            locale.setlocale(locale.LC_TIME, "da_DK.UTF-8")
-        except locale.Error:
-            return "Error setting locale to Danish"
-
-        if data.get("ukendt_dato") is True:
-            return "Ukendt"
-
-        try:
-            date_str = data["dateOfExamination"]
-            year, month, day = date_str.split("-")
-            date_obj = date(int(year), int(month), int(day))
-            return date_obj.strftime("%B %Y").capitalize()
-        except (ValueError, KeyError):
-            return "Error parsing date"
 
     subject = edi_portal_content["subject"]
 
@@ -349,38 +345,21 @@ def edi_portal_add_content(
     if not body:
         raise ValueError("Body is required.")
 
-    examination_date = _get_formatted_date(data=queue_element)
-    # risk_profile_map = {0: "Grøn", 1: "Gul", 2: "Rød", 3: "Ukendt"}
-    # risc_profile = risk_profile_map.get(queue_element.get("riskProfil"))
-    dental_plan = queue_element.get("tandplejeplan", "Ukendt")
-
-    body_modified = re.sub(r"@examinationDate", examination_date, body)
-    # body_modified = re.sub(r"@riscProfile", risc_profile, body_modified)
+    prefix = "Besked til privat tandklinik - Frit valg: "
+    note_text = ""
     if journal_continuation_text:
-        if "Besked til privat tandlæge - Frit valg: " in journal_continuation_text:
-            journal_continuation_text = journal_continuation_text.replace(
-                "Besked til privat tandlæge - Frit valg: ", ""
-            )
-        elif (
-            "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: "
-            in journal_continuation_text
-        ):
-            journal_continuation_text = journal_continuation_text.replace(
-                "Følgende oplysninger skal medsendes til privat tandlæge i forbindelse med udskrivning: ",
-                "",
-            )
+        if journal_continuation_text.startswith(prefix):
+            note_text = journal_continuation_text[len(prefix) :]
+        else:
+            note_text = journal_continuation_text
 
-    if dental_plan:
-        body_modified = re.sub(
-            r"@dentalPlan",
-            f"Anden information: {journal_continuation_text}",
-            body_modified,
-        )
-    else:
-        body_modified = re.sub(r"@dentalPlan", "", body_modified)
+    body_modified = body.replace(
+        "Næste undersøgelse: @examinationDate\nRisikoprofil: @riscProfile\n@dentalPlan",
+        note_text,
+    )
 
     # Truncate body to 31150 characters to fit EDI portal limitations
-    body_modified = body[:31150]
+    body_modified = body_modified[:31150]
 
     try:
         root_web_area = wait_for_control(
@@ -570,6 +549,9 @@ def _get_receipt_download_menu(root_web_area) -> object:
 
 def _wait_for_receipt_download(timeout: int = 60) -> Path:
     """Poll the Downloads folder until a Meddelelse*.pdf appears."""
+
+    time.sleep(5)
+    kill_adobe()
     download_path = Path.home() / "Downloads"
     start_time = time.time()
 
@@ -613,27 +595,280 @@ def edi_portal_get_journal_sent_receip(subject: str) -> str:
             raise RuntimeError("Message not sent.")
 
         print(f"Using latest matching row {latest_matching_row}")
-        menu_button = grid_pattern.GetItem(latest_matching_row, 9)
-        menu_button.Click(simulateMove=False, waitTime=0)
-        time.sleep(3)
 
-        menu_popup = _get_receipt_download_menu(root_web_area)
-        menu_popup_item = wait_for_control(
-            menu_popup.ListItemControl,
-            {"Name": " Gem"},
-            search_depth=50,
-        )
-        menu_popup_item.SetFocus()
-        pos = menu_popup_item.GetClickablePoint()
-        auto.MoveTo(pos[0], pos[1], moveSpeed=0.5, waitTime=0)
-        menu_popup_item_save = wait_for_control(
-            menu_popup.HyperlinkControl,
-            {"Name": "Gem som PDF"},
-            search_depth=50,
-        )
-        menu_popup_item_save.Click(simulateMove=False, waitTime=0)
+        # Get the row's Y coordinate from the grid cell (any column works for Y)
+        row_cell = grid_pattern.GetItem(latest_matching_row, 0)
+        table_rect = table_post_messages.BoundingRectangle
+        row_rect = row_cell.BoundingRectangle
+        row_y = (row_rect.top + row_rect.bottom) // 2
 
-        return _wait_for_receipt_download()
+        # Step 1: hover over the row center to ensure the ... button is rendered
+        row_center_x = (table_rect.left + table_rect.right) // 2
+        print(
+            f"[DEBUG] hovering row center at ({row_center_x}, {row_y}) to trigger ... button"
+        )
+        auto.MoveTo(row_center_x, row_y, moveSpeed=0.5, waitTime=0)
+        time.sleep(0.5)
+
+        # Step 2: find the ... button via proper tree traversal (not column index)
+        def _find_first_button(ctrl, max_depth=10):
+            if max_depth <= 0:
+                return None
+            for child in ctrl.GetChildren():
+                if child.ControlType == auto.ControlType.ButtonControl:
+                    return child
+                found = _find_first_button(child, max_depth - 1)
+                if found:
+                    return found
+            return None
+
+        table_children = table_post_messages.GetChildren()
+        print(f"[DEBUG] table has {len(table_children)} children")
+        # children[0] = header row, data rows start at [1]
+        target_row_ctrl = (
+            table_children[latest_matching_row]
+            if latest_matching_row < len(table_children)
+            else None
+        )
+        print(f"[DEBUG] target_row_ctrl={target_row_ctrl}")
+
+        dots_button = _find_first_button(target_row_ctrl) if target_row_ctrl else None
+        print(f"[DEBUG] dots_button via tree={dots_button}")
+
+        if dots_button:
+            dots_pos = dots_button.GetClickablePoint()
+            print(f"[DEBUG] moving to ... button at {dots_pos}")
+            auto.MoveTo(dots_pos[0], dots_pos[1], moveSpeed=0.5, waitTime=0)
+        else:
+            # Fallback: midpoint between cell right and table right
+            fallback_x = (row_rect.right + table_rect.right) // 2
+            dots_pos = (fallback_x, row_y)
+            print(
+                f"[DEBUG] button not found in tree, fallback hover at ({fallback_x}, {row_y})"
+            )
+            auto.MoveTo(fallback_x, row_y, moveSpeed=0.5, waitTime=0)
+        time.sleep(0.5)
+
+        # The "Gem" HyperlinkControl is only in the UIA tree when the mouse physically
+        # hovers over it. The action dropdown doesn't appear as a ListControl while
+        # hovering the ... button — items only materialise when hovered directly.
+        # Strategy: scan downward from dots_pos in small steps. CSS hover keeps the
+        # dropdown open as the mouse moves through it, so we stop as soon as we find
+        # the "Gem" hyperlink in the tree.
+        def _find_gem_hyperlink(ctrl, depth=0, max_depth=15):
+            if depth > max_depth:
+                return None
+            try:
+                if (
+                    ctrl.ControlType == auto.ControlType.HyperlinkControl
+                    and (ctrl.Name or "").strip() == "Gem"
+                ):
+                    print(f"[DEBUG] found Gem hyperlink: rect={ctrl.BoundingRectangle}")
+                    return ctrl
+            except Exception:
+                pass
+            for child in ctrl.GetChildren():
+                result = _find_gem_hyperlink(child, depth + 1, max_depth)
+                if result:
+                    return result
+            return None
+
+        # The dropdown opens to the LEFT of the ... button.
+        # Phase 1: scan left from dots_pos until we detect we're inside the dropdown
+        # (any nearby hyperlink becomes visible in the UIA tree).
+        # Phase 2: from that x position, scan downward to find "Gem".
+        def _find_any_nearby_hyperlink(ctrl, dots_x, dots_y, depth=0, max_depth=15):
+            """Return any HyperlinkControl that is spatially within the dropdown area."""
+            if depth > max_depth:
+                return None
+            try:
+                if ctrl.ControlType == auto.ControlType.HyperlinkControl:
+                    rect = ctrl.BoundingRectangle
+                    if (
+                        dots_x - 500 < rect.left < dots_x
+                        and dots_y - 50 < rect.top < dots_y + 500
+                        and rect.width > 0
+                        and rect.height > 0
+                    ):
+                        return ctrl
+            except Exception:
+                pass
+            for child in ctrl.GetChildren():
+                result = _find_any_nearby_hyperlink(
+                    child, dots_x, dots_y, depth + 1, max_depth
+                )
+                if result:
+                    return result
+            return None
+
+        gem_link = None
+
+        # APPROACH 1: check the ... button's parent/ancestor tree for a ListControl sibling.
+        # Accessibility Insights showed the dropdown as: group > [button "", list ""].
+        # We walk up a few ancestor levels and print every child for debug.
+        print(
+            "[DEBUG] Approach 1: inspecting button ancestor tree for ListControl sibling"
+        )
+        gem_item_rect = None
+        gem_list_item = None
+        ancestor = dots_button.GetParentControl()
+        for level in range(4):
+            if ancestor is None:
+                print(f"[DEBUG]   level {level}: ancestor is None, stopping")
+                break
+            try:
+                children = ancestor.GetChildren()
+            except Exception as exc:
+                print(f"[DEBUG]   level {level}: GetChildren failed: {exc}")
+                break
+            print(
+                f"[DEBUG]   level {level}: ancestor type={ancestor.ControlType}, "
+                f"rect={ancestor.BoundingRectangle}, children={len(children)}"
+            )
+            for child in children:
+                print(
+                    f"[DEBUG]     child type={child.ControlType}, "
+                    f"name={repr(child.Name)}, rect={child.BoundingRectangle}"
+                )
+                if child.ControlType == auto.ControlType.ListControl:
+                    print(f"[DEBUG]     ^ ListControl found at level {level}")
+                    for item in child.GetChildren():
+                        item_name = (item.Name or "").strip()
+                        print(
+                            f"[DEBUG]       list item: {repr(item_name)}, rect={item.BoundingRectangle}"
+                        )
+                        if "Gem" in item_name and "PDF" not in item_name:
+                            gem_item_rect = item.BoundingRectangle
+                            gem_list_item = item
+                            print("[DEBUG]       ^ matched 'Gem' item")
+                    break
+            if gem_item_rect:
+                break
+            ancestor = ancestor.GetParentControl()
+
+        def _find_control_by_name(ctrl, name, depth=0, max_depth=20):
+            """Find any UIA control whose Name matches, regardless of ControlType."""
+            if depth > max_depth:
+                return None
+            try:
+                if (ctrl.Name or "").strip() == name:
+                    print(
+                        f"[DEBUG]   found {repr(name)}: type={ctrl.ControlType}, "
+                        f"rect={ctrl.BoundingRectangle}"
+                    )
+                    return ctrl
+            except Exception:
+                pass
+            for child in ctrl.GetChildren():
+                result = _find_control_by_name(child, name, depth + 1, max_depth)
+                if result:
+                    return result
+            return None
+
+        def _click_gem_som_pdf(label):
+            """Search tree for 'Gem som PDF' and click it. Returns True on success."""
+            ctrl = _find_control_by_name(root_web_area, "Gem som PDF")
+            if ctrl:
+                print(
+                    f"[DEBUG] {label}: clicking 'Gem som PDF' rect={ctrl.BoundingRectangle}"
+                )
+                ctrl.Click(simulateMove=False, waitTime=0)
+                return True
+            print(f"[DEBUG] {label}: 'Gem som PDF' not in tree")
+            return False
+
+        # APPROACH 1: sibling ListControl found — use the saved gem_list_item reference
+        # directly instead of scanning for a 'Gem' HyperlinkControl (which never appears
+        # in the tree; the ListItemControl IS the accessible element).
+        if gem_item_rect and gem_list_item is not None:
+            # 1a — hover the left text area of the item and wait for a possible submenu
+            text_x = gem_item_rect.left + 20
+            text_y = (gem_item_rect.top + gem_item_rect.bottom) // 2
+            print(f"[DEBUG] Approach 1a: moving to Gem text area ({text_x}, {text_y})")
+            auto.MoveTo(text_x, text_y, moveSpeed=0.3, waitTime=0)
+            time.sleep(1.0)
+            if _click_gem_som_pdf("Approach 1a — hover"):
+                return _wait_for_receipt_download()
+
+            # 1b — maybe a 'Gem' hyperlink appeared after hover (historical behaviour)
+            gem_link_now = _find_gem_hyperlink(root_web_area)
+            if gem_link_now:
+                pos = gem_link_now.GetClickablePoint()
+                print(f"[DEBUG] Approach 1b: 'Gem' hyperlink appeared, moving to {pos}")
+                auto.MoveTo(pos[0], pos[1], moveSpeed=0.3, waitTime=0)
+                time.sleep(0.5)
+                if _click_gem_som_pdf("Approach 1b — after Gem hyperlink hover"):
+                    return _wait_for_receipt_download()
+
+            # 1c — invoke the Gem ListItemControl via UIA (no physical mouse movement)
+            print("[DEBUG] Approach 1c: InvokePattern on Gem ListItemControl")
+            try:
+                gem_list_item.GetInvokePattern().Invoke()
+                time.sleep(0.5)
+                if _click_gem_som_pdf("Approach 1c — after InvokePattern"):
+                    return _wait_for_receipt_download()
+            except Exception as exc:
+                print(f"[DEBUG] Approach 1c: InvokePattern raised {exc}")
+
+            # 1d — UIA Click on the Gem ListItemControl (no physical mouse movement)
+            print(
+                "[DEBUG] Approach 1d: Click(simulateMove=False) on Gem ListItemControl"
+            )
+            try:
+                gem_list_item.Click(simulateMove=False, waitTime=0)
+                time.sleep(0.5)
+                if _click_gem_som_pdf("Approach 1d — after ListItem click"):
+                    return _wait_for_receipt_download()
+            except Exception as exc:
+                print(f"[DEBUG] Approach 1d: Click raised {exc}")
+
+            print(
+                "[DEBUG] Approach 1: all sub-approaches exhausted, falling through to Approach 2"
+            )
+
+        # APPROACH 2: 2D scan — try positions to the left of and around the ... button.
+        # Items only appear as hyperlinks in the UIA tree when the mouse physically
+        # hovers over the element text.
+        gem_link = None
+        print(f"[DEBUG] Approach 2: starting 2D scan. dots_pos={dots_pos}")
+        y_offsets = []
+        for step in range(0, 250, 20):
+            y_offsets.append(step)
+            if step != 0:
+                y_offsets.append(-step)
+
+        for x_offset in range(50, 450, 50):
+            scan_x = dots_pos[0] - x_offset
+            for y_off in y_offsets:
+                scan_y = dots_pos[1] + y_off
+                auto.MoveTo(scan_x, scan_y, moveSpeed=0, waitTime=0)
+                time.sleep(0.1)
+                gem_link = _find_gem_hyperlink(root_web_area)
+                if gem_link:
+                    print(
+                        f"[DEBUG] Approach 2: 'Gem' hyperlink at ({scan_x}, {scan_y}) "
+                        f"x_offset={x_offset}, y_offset={y_off}"
+                    )
+                    break
+                print(f"[DEBUG] Approach 2: ({scan_x}, {scan_y}) — no match yet")
+            if gem_link:
+                break
+
+        if gem_link is not None:
+            pos = gem_link.GetClickablePoint()
+            print(f"[DEBUG] Approach 2: Gem hyperlink clickable point: {pos}")
+            auto.MoveTo(pos[0], pos[1], moveSpeed=0.3, waitTime=0)
+            time.sleep(0.5)
+            if _click_gem_som_pdf("Approach 2 — after Gem hyperlink hover"):
+                return _wait_for_receipt_download()
+
+        # Final fallback: the dropdown may still be visible from a prior hover
+        if _click_gem_som_pdf("Approach 2 — direct search after full scan"):
+            return _wait_for_receipt_download()
+
+        raise RuntimeError(
+            "Could not find 'Gem som PDF' — see [DEBUG] logs for dropdown structure"
+        )
 
     except Exception as e:
         print(f"Error while downloading the receipt from EDI Portal: {e}")
@@ -716,6 +951,9 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         except ValueError:
             return None
 
+    print(
+        f"[DEBUG] edi_portal_is_patient_data_sent: checking if already sent for subject='{subject}'"
+    )
     try:
         url_field = wait_for_control(
             auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
@@ -723,7 +961,9 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Messages/Sent")
         url_field.SendKeys("{ENTER}")
-
+        print(
+            "[DEBUG] edi_portal_is_patient_data_sent: navigating to Sent page, sleeping 5s..."
+        )
         time.sleep(5)
 
         test = wait_for_control(
@@ -751,7 +991,7 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         #             break
 
         # Define one month ago here
-        one_month_ago = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
+        one_month_ago = datetime.now(UTC) - timedelta(days=30)
 
         if row_count > 0:
             for row in range(1, row_count):
@@ -782,13 +1022,19 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
                     f"Message contains '{subject}' but date {parsed_date} is not older than 1 month"
                 )
 
-        print(f"{success_message=}")
+        print(
+            f"[DEBUG] edi_portal_is_patient_data_sent: success_message={success_message}"
+        )
         if success_message:
-            print("Message has already been sent.")
+            print(
+                "[DEBUG] edi_portal_is_patient_data_sent: already sent → returning True"
+            )
             return True
 
+        print("[DEBUG] edi_portal_is_patient_data_sent: not sent → returning False")
         return False
     except TimeoutError:
+        print("[DEBUG] edi_portal_is_patient_data_sent: TimeoutError → returning False")
         return False
     except Exception as e:
         print(f"Error while checking if patient data is sent in EDI Portal: {e}")
@@ -806,6 +1052,9 @@ def edi_portal_go_to_send_journal() -> None:
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Journal/Create")
         url_field.SendKeys("{ENTER}")
+        print("[DEBUG] edi_portal_go_to_send_journal: navigating, sleeping 5s...")
+        time.sleep(5)
+        print("[DEBUG] edi_portal_go_to_send_journal: done.")
     except Exception as e:
         print(f"Error while navigating to 'Send journal' in EDI Portal: {e}")
         raise

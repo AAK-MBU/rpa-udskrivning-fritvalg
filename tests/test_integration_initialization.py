@@ -56,7 +56,7 @@ if not HAS_DEPENDENCIES:
 TEST_PATIENT_CPR = os.getenv("TEST_PATIENT_CPR", "")
 TEST_PATIENT_NAME = os.getenv("TEST_PATIENT_NAME", "")
 SOLTEQ_DB_CONN = os.getenv("SOLTEQ_TAND_DB_CONNSTR", "")
-RPA_DB_CONN = os.getenv("RPA_DB_CONNSTR", "")
+RPA_DB_CONN = os.getenv("DBCONNECTIONSTRINGPROD", "")
 
 
 def has_solteq_installed() -> bool:
