@@ -71,13 +71,17 @@ def sniff_format(path: str) -> str:
     return "unknown"
 
 
+IMAGE_NDIM = 3
+
+
 def _dicom_to_grayscale_array(ds: pydicom.Dataset) -> np.ndarray:
     """Decode a DICOM dataset to an 8-bit grayscale array."""
     array = ds.pixel_array
 
     # Multi-frame objects (e.g. CBCT stacks) are not single images; take frame 0.
+
     number_of_frames = int(getattr(ds, "NumberOfFrames", 1) or 1)
-    if number_of_frames > 1 and array.ndim >= 3:
+    if number_of_frames > 1 and array.ndim >= IMAGE_NDIM:
         logger.warning(
             "Multi-frame DICOM, using first frame only",
             extra={"frames": number_of_frames},
@@ -87,7 +91,7 @@ def _dicom_to_grayscale_array(ds: pydicom.Dataset) -> np.ndarray:
     photometric = str(ds.get("PhotometricInterpretation", "")).upper()
 
     # Colour source (photos imported into Romexis): convert via Pillow.
-    if array.ndim == 3 and array.shape[-1] in (3, 4):
+    if array.ndim == IMAGE_NDIM and array.shape[-1] in (3, 4):
         return np.array(Image.fromarray(array[..., :3]).convert("L"))
 
     # Honour the windowing the DICOM asks for; only meaningful above 8-bit.
