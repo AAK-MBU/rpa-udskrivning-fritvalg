@@ -15,6 +15,9 @@ dependencies = [
     "ruff",
     "tzdata",
     "uiautomation",
+    "pydicom",
+    "pylibjpeg",
+    "pylibjpeg-libjpeg",
 ]
 
 [tool.uv.sources]
