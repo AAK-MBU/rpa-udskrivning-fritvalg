@@ -1,22 +1,13 @@
-# src/steps/romexis/image_handler.py
-
 """
 This module handles the processing of images.
 """
 
 import logging
 import os
-import shutil
-import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 
 from romexis.helper_functions import add_black_bar_and_text_to_image
-
-from src.steps.romexis.image_normalizer import (
-    ImageNormalizationError,
-    normalize_image_source,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -78,107 +69,108 @@ def format_image_date(date_value: object) -> str | None:
         return None
 
 
-def _process_single_image(
-    source_path: str,
-    staging_dir: str,
-    *args,
-    **kwargs,
-) -> None:
-    """Normalize the source format if needed, then run standard processing.
+def log_file_info(file_path: str, image_id: object = None) -> None:
+    """Log what kind of file this is, for diagnosing a processing failure.
 
-    Runs on a worker thread so conversion cost is parallelized alongside
-    the rest of the image processing.
+    Never raises, so it is safe to call from an except block.
 
     Args:
-        source_path: Path to the file on the Romexis share.
-        staging_dir: Directory for format-converted intermediates.
-        *args: Positional arguments forwarded to add_black_bar_and_text_to_image.
-        **kwargs: Keyword arguments forwarded to add_black_bar_and_text_to_image.
+        file_path: Path to the image file on the Romexis share.
+        image_id: Romexis image_id, for cross-referencing the log.
     """
-    readable_path = normalize_image_source(source_path, staging_dir)
-    add_black_bar_and_text_to_image(readable_path, *args, **kwargs)
+    parts = [f"image_id={image_id}", f"path={file_path}"]
+
+    try:
+        if not os.path.exists(file_path):
+            parts.append("exists=False")
+            logger.error("FILE INFO: %s", " | ".join(parts))
+            return
+
+        parts.append(f"size={os.path.getsize(file_path)}")
+
+        with open(file_path, "rb") as f:
+            head = f.read(132)
+
+        parts.append(f"first_bytes={head[:12].hex(' ')}")
+
+        is_dicom = head[128:132] == b"DICM"
+        parts.append(f"dicom={is_dicom}")
+
+        if is_dicom:
+            try:
+                import pydicom
+
+                ds = pydicom.dcmread(file_path, stop_before_pixels=True)
+                parts.append(f"transfer_syntax={ds.file_meta.TransferSyntaxUID}")
+                parts.append(f"syntax_name={ds.file_meta.TransferSyntaxUID.name}")
+                parts.append(f"sop_class={ds.get('SOPClassUID', '')}")
+                parts.append(f"modality={ds.get('Modality', '')}")
+                parts.append(f"size_px={ds.get('Columns', '?')}x{ds.get('Rows', '?')}")
+                parts.append(f"bits={ds.get('BitsAllocated', '')}")
+                parts.append(f"photometric={ds.get('PhotometricInterpretation', '')}")
+                parts.append(f"frames={ds.get('NumberOfFrames', 1)}")
+            except ImportError:
+                parts.append("pydicom=NOT INSTALLED")
+            # pylint: disable-next = broad-exception-caught
+            except Exception as e:  # noqa: BLE001
+                parts.append(f"dicom_read_error={type(e).__name__}: {e}")
+
+    # pylint: disable-next = broad-exception-caught
+    except Exception as e:  # noqa: BLE001
+        parts.append(f"log_error={type(e).__name__}: {e}")
+
+    logger.error("FILE INFO: %s", " | ".join(parts))
 
 
 def process_images_threaded(
     images_data, destination_path, ssn, person_name, db_handler
 ) -> None:
-    """Process images concurrently using threads.
+    """Process images concurrently using threads."""
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {}
 
-    Raises:
-        RuntimeError: One or more images could not be processed.
-    """
-    futures = {}
-    failures = []
-    staging_dir = tempfile.mkdtemp(prefix="romexis_normalize_")
+        for img in images_data:
+            gamma_data = db_handler.get_gamma_data(image_id=img["image_id"])
+            source_path = build_source_path(img["file_path"])
 
-    try:
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            for img in images_data:
-                source_path = build_source_path(img["file_path"])
+            if not os.path.exists(source_path):
+                logger.info("Skipping missing file: %s", source_path)
+                continue
 
-                if not os.path.exists(source_path):
-                    logger.info("Skipping missing file: %s", source_path)
-                    continue
+            formatted_date = format_image_date(img.get("image_date"))
+            image_type = img.get("image_type")
 
-                if os.path.getsize(source_path) == 0:
-                    logger.warning("Skipping zero-byte file: %s", source_path)
-                    continue
+            future = executor.submit(
+                add_black_bar_and_text_to_image,
+                source_path,
+                destination_path,
+                ssn,
+                person_name,
+                formatted_date,
+                image_type,
+                rotation_angle=img.get("rotation_angle", 0),
+                is_mirror=img.get("is_mirror", False),
+                gamma_value=(
+                    gamma_data[0]["gamma_value"]
+                    if gamma_data and gamma_data[0].get("gamma_value")
+                    else 1.0
+                ),
+            )
+            futures[future] = (img["image_id"], source_path)
 
-                gamma_data = db_handler.get_gamma_data(image_id=img["image_id"])
-
-                future = executor.submit(
-                    _process_single_image,
-                    source_path,
-                    staging_dir,
-                    destination_path,
-                    ssn,
-                    person_name,
-                    format_image_date(img.get("image_date")),
-                    img.get("image_type"),
-                    rotation_angle=img.get("rotation_angle", 0),
-                    is_mirror=img.get("is_mirror", False),
-                    gamma_value=(
-                        gamma_data[0]["gamma_value"]
-                        if gamma_data and gamma_data[0].get("gamma_value")
-                        else 1.0
-                    ),
+        for future in as_completed(futures):
+            image_id, source_path = futures[future]
+            try:
+                future.result()
+            except Exception as e:
+                logger.error(
+                    "Image processing failed for image_id=%s: %s: %s",
+                    image_id,
+                    type(e).__name__,
+                    e,
                 )
-                futures[future] = (img["image_id"], source_path)
-
-            # Drain every future before re-raising, so no worker's exception is
-            # left unretrieved and the executor shuts down cleanly.
-            for future in as_completed(futures):
-                image_id, source_path = futures[future]
-                try:
-                    future.result()
-                except ImageNormalizationError:
-                    logger.exception(
-                        "Unsupported image format",
-                        extra={"image_id": image_id, "source_path": source_path},
-                    )
-                    failures.append((image_id, source_path))
-                except Exception:
-                    logger.exception(
-                        "Image processing failed",
-                        extra={"image_id": image_id, "source_path": source_path},
-                    )
-                    failures.append((image_id, source_path))
-    finally:
-        shutil.rmtree(staging_dir, ignore_errors=True)
-
-    if failures:
-        # A patient record export must not silently omit images. To degrade
-        # instead of failing the work item, log and return here rather than raise.
-        logger.error(
-            "%d of %d images failed",
-            len(failures),
-            len(futures),
-            extra={"failed_images": [image_id for image_id, _ in failures]},
-        )
-        raise RuntimeError(
-            f"{len(failures)} of {len(futures)} images could not be processed: "
-            f"{[image_id for image_id, _ in failures]}"
-        )
+                log_file_info(source_path, image_id)
+                raise
 
 
 def clear_img_files_in_folder(folder_path: str) -> None:
