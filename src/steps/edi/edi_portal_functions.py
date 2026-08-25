@@ -111,6 +111,11 @@ def edi_portal_check_contractor_id(
         ):
             contractor_id = "485055"
             clinic_phone_number = "86135240"
+        elif (
+            extern_clinic_data[0]["contractorId"] == "469378"
+        ):
+            contractor_id = "472034"
+            clinic_phone_number = "86124500"
         else:
             contractor_id = extern_clinic_data[0]["contractorId"]
             clinic_phone_number = extern_clinic_data[0]["phoneNumber"]
