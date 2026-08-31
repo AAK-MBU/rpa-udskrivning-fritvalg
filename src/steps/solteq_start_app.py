@@ -6,6 +6,7 @@ process config.
 """
 
 import logging
+from typing import Any
 
 from dotenv import load_dotenv
 from mbu_dev_shared_components.database.connection import RPAConnection
