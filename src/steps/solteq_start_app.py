@@ -50,11 +50,8 @@ def get_solteq_credentials() -> tuple[str, str]:
     username = creds["username"]
     password = creds["decrypted_password"]
 
-
     if not username or not password:
-        raise ValueError(
-            "Solteq credentials not found. "
-        )
+        raise ValueError("Solteq credentials not found. ")
 
     return username, password
 
