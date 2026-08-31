@@ -6,9 +6,9 @@ process config.
 """
 
 import logging
-import os
 
 from dotenv import load_dotenv
+from mbu_dev_shared_components.database.connection import RPAConnection
 from mbu_solteqtand_shared_components.application import SolteqTandApp
 
 from src.core.automation_runner import AutomationRunner
@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 
 # Path to the Solteq Tand executable
 SOLTEQ_TAND_APP_PATH = r"C:\Program Files (x86)\TM Care\TM Tand\TMTand.exe"
+
+
+def get_rpa_credentials(credential_name: str) -> dict[str, Any]:
+    """
+    Get credentials from RPA connection
+
+    Args:
+        credential_name (str): Name of the credential to retrieve
+
+    Returns:
+        dict[str, Any]: Dictionary containing username, password,
+                       and other credential data
+    """
+    with RPAConnection(db_env="PROD", commit=False) as rpa_conn:
+        return rpa_conn.get_credential(credential_name)
 
 
 def get_solteq_credentials() -> tuple[str, str]:
@@ -31,14 +46,12 @@ def get_solteq_credentials() -> tuple[str, str]:
     """
     load_dotenv()
 
-    username = os.getenv("SOLTEQ_USERNAME")
-    password = os.getenv("SOLTEQ_PASSWORD")
+    creds = get_rpa_credentials("solteq_tand_svcrpambu001")
+    username = creds["username"]
+    password = creds["decrypted_password"]
 
     if not username or not password:
-        raise ValueError(
-            "Solteq credentials not found. "
-            "Set SOLTEQ_USERNAME and SOLTEQ_PASSWORD in environment."
-        )
+        raise ValueError("Solteq credentials not found. ")
 
     return username, password
 
