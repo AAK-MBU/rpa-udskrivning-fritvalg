@@ -133,6 +133,7 @@ def edi_portal_check_contractor_id(
             "form-control filter_search valid",
         ]
 
+        search_box = None
         for class_name in class_options:
             try:
                 search_box = wait_for_control(
@@ -145,6 +146,12 @@ def edi_portal_check_contractor_id(
                 continue
             if search_box:
                 break
+
+        if not search_box:
+            raise RuntimeError(
+                "Recipient search box not found in EDI Portal - the wizard is "
+                "probably still on the patient information page."
+            )
 
         search_box.SetFocus()
         search_box_value_pattern = search_box.GetPattern(auto.PatternId.ValuePattern)
@@ -196,28 +203,46 @@ def _focus_edge_window():
     return edge_window
 
 
-def _try_send_shortcut(shortcut: str) -> bool:
+def _try_send_shortcut(shortcut: str, ready_button: dict, timeout: int = 15) -> bool:
     """
     Sends a keyboard shortcut to the EDI portal page.
 
-    The portal's shortcuts are HTML accesskeys handled by the page, so
-    they only fire when the keyboard focus is inside the document.
-    Sending them to the document control focuses it first — focusing
-    the Edge window alone is not enough, because after a navigation via
-    the address bar the focused element is the address bar, where Edge
-    would swallow the keystroke.
+    The portal's shortcuts are HTML accesskeys handled by the page
+    itself, which has two consequences:
+
+    - They only fire when the keyboard focus is inside the document, so
+      the shortcut goes to the document control (which focuses itself
+      first). Focusing the Edge window alone is not enough: after a
+      navigation via the address bar the focused element is the address
+      bar, where Edge would swallow the keystroke.
+    - They are silently dropped while the page is still loading, so we
+      wait for the button the shortcut activates to exist before
+      sending. The button is only a readiness signal — the shortcut,
+      not a click, is what activates it.
 
     Args:
         shortcut (str): The shortcut in uiautomation SendKeys syntax.
+        ready_button (dict): Search parameters for the button the
+                             shortcut activates, used to tell whether
+                             the page has finished rendering.
+        timeout (int): How long to wait for the page to be ready.
 
     Returns:
         bool: True if the shortcut was sent, False if it could not be,
               in which case the caller falls back to clicking the button.
     """
     try:
-        print(f"[DEBUG] sending shortcut {shortcut} to the EDI portal...")
-        _focus_edge_window()
+        edge_window = _focus_edge_window()
 
+        print(f"[DEBUG] waiting for the page to be ready ({ready_button})...")
+        wait_for_control(
+            edge_window.ButtonControl,
+            ready_button,
+            search_depth=50,
+            timeout=timeout,
+        )
+
+        print(f"[DEBUG] sending shortcut {shortcut} to the EDI portal...")
         root_web_area = wait_for_control(
             auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
         )
@@ -286,7 +311,9 @@ def edi_portal_click_next_button(sleep_time: int, use_shortcut: bool = True) -> 
         use_shortcut (bool): Send Alt+N instead of clicking the button.
     """
     try:
-        if not (use_shortcut and _try_send_shortcut(NEXT_PAGE_SHORTCUT)):
+        if not (
+            use_shortcut and _try_send_shortcut(NEXT_PAGE_SHORTCUT, {"Name": "Næste"})
+        ):
             _click_next_button_control()
 
         print(f"[DEBUG] edi_portal_click_next_button: sleeping {sleep_time}s...")
@@ -322,6 +349,7 @@ def edi_portal_lookup_contractor_id(extern_clinic_data: dict) -> None:
             "form-control filter_search valid",
         ]
 
+        search_box = None
         for class_name in class_options:
             try:
                 search_box = wait_for_control(
@@ -334,6 +362,12 @@ def edi_portal_lookup_contractor_id(extern_clinic_data: dict) -> None:
                 continue
             if search_box:
                 break
+
+        if not search_box:
+            raise RuntimeError(
+                "Recipient search box not found in EDI Portal - the wizard is "
+                "probably still on the patient information page."
+            )
 
         search_box.SetFocus()
         search_box_value_pattern = search_box.GetPattern(auto.PatternId.ValuePattern)
@@ -565,7 +599,12 @@ def edi_portal_send_message(use_shortcut: bool = True) -> None:
         use_shortcut (bool): Send Alt+S instead of clicking the button.
     """
     try:
-        if not (use_shortcut and _try_send_shortcut(SEND_MESSAGE_SHORTCUT)):
+        if not (
+            use_shortcut
+            and _try_send_shortcut(
+                SEND_MESSAGE_SHORTCUT, {"AutomationId": "submitButton"}
+            )
+        ):
             _click_send_message_button_control()
 
         print("Message sent successfully.")
