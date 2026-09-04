@@ -203,7 +203,7 @@ def _focus_edge_window():
     return edge_window
 
 
-def _try_send_shortcut(shortcut: str, ready_button: dict, timeout: int = 15) -> bool:
+def _try_send_shortcut(shortcut: str, wait_before: float = 2.0) -> bool:
     """
     Sends a keyboard shortcut to the EDI portal page.
 
@@ -215,32 +215,26 @@ def _try_send_shortcut(shortcut: str, ready_button: dict, timeout: int = 15) -> 
       first). Focusing the Edge window alone is not enough: after a
       navigation via the address bar the focused element is the address
       bar, where Edge would swallow the keystroke.
-    - They are silently dropped while the page is still loading, so we
-      wait for the button the shortcut activates to exist before
-      sending. The button is only a readiness signal — the shortcut,
-      not a click, is what activates it.
+    - They are dropped while the page is still rendering, so we give the
+      page a moment to settle first. A short sleep is used rather than
+      waiting for the button to appear in the UI tree: searching the
+      window for it is slow, and it is not reliably found on every page
+      of the wizard.
 
     Args:
         shortcut (str): The shortcut in uiautomation SendKeys syntax.
-        ready_button (dict): Search parameters for the button the
-                             shortcut activates, used to tell whether
-                             the page has finished rendering.
-        timeout (int): How long to wait for the page to be ready.
+        wait_before (float): Seconds to let the page settle before
+                             sending the shortcut.
 
     Returns:
         bool: True if the shortcut was sent, False if it could not be,
               in which case the caller falls back to clicking the button.
     """
     try:
-        edge_window = _focus_edge_window()
+        print(f"[DEBUG] letting the page settle for {wait_before}s...")
+        time.sleep(wait_before)
 
-        print(f"[DEBUG] waiting for the page to be ready ({ready_button})...")
-        wait_for_control(
-            edge_window.ButtonControl,
-            ready_button,
-            search_depth=50,
-            timeout=timeout,
-        )
+        _focus_edge_window()
 
         print(f"[DEBUG] sending shortcut {shortcut} to the EDI portal...")
         root_web_area = wait_for_control(
@@ -297,23 +291,25 @@ def _click_next_button_control() -> None:
     next_button.Click(simulateMove=False, waitTime=0)
 
 
-def edi_portal_click_next_button(sleep_time: int, use_shortcut: bool = True) -> None:
+def edi_portal_click_next_button(
+    sleep_time: int, use_shortcut: bool = True, wait_before: float = 2.0
+) -> None:
     """
     Advances the EDI portal to the next page.
 
     The portal exposes Alt+N as a keyboard shortcut for the "Næste"
-    button, so the shortcut is sent to the Edge window instead of
-    locating and clicking the button in the UI tree. If the shortcut
-    cannot be sent, the button is located and clicked instead.
+    button, so the shortcut is sent to the page instead of locating and
+    clicking the button in the UI tree. If the shortcut cannot be sent,
+    the button is located and clicked instead.
 
     Args:
         sleep_time (int): Time to wait after advancing to the next page.
         use_shortcut (bool): Send Alt+N instead of clicking the button.
+        wait_before (float): Seconds to let the current page settle
+                             before sending Alt+N.
     """
     try:
-        if not (
-            use_shortcut and _try_send_shortcut(NEXT_PAGE_SHORTCUT, {"Name": "Næste"})
-        ):
+        if not (use_shortcut and _try_send_shortcut(NEXT_PAGE_SHORTCUT, wait_before)):
             _click_next_button_control()
 
         print(f"[DEBUG] edi_portal_click_next_button: sleeping {sleep_time}s...")
@@ -586,7 +582,9 @@ def _click_send_message_button_control() -> None:
     send_message_button.Click(simulateMove=False, waitTime=0)
 
 
-def edi_portal_send_message(use_shortcut: bool = True) -> None:
+def edi_portal_send_message(
+    use_shortcut: bool = True, wait_before: float = 2.0
+) -> None:
     """
     Sends a message in the EDI portal.
 
@@ -597,13 +595,12 @@ def edi_portal_send_message(use_shortcut: bool = True) -> None:
 
     Args:
         use_shortcut (bool): Send Alt+S instead of clicking the button.
+        wait_before (float): Seconds to let the page settle before
+                             sending Alt+S.
     """
     try:
         if not (
-            use_shortcut
-            and _try_send_shortcut(
-                SEND_MESSAGE_SHORTCUT, {"AutomationId": "submitButton"}
-            )
+            use_shortcut and _try_send_shortcut(SEND_MESSAGE_SHORTCUT, wait_before)
         ):
             _click_send_message_button_control()
 
