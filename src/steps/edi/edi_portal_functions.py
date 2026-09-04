@@ -1209,6 +1209,40 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         raise
 
 
+def edi_portal_go_to_sent_messages(
+    wait_before: float = 3.0, sleep_time: int = 5
+) -> None:
+    """
+    Navigates to the EDI portal's list of sent messages.
+
+    Sending a message leaves the portal on the inbox, but the receipt is
+    read from the sent list, so we navigate there explicitly instead of
+    relying on where the portal happens to land after a send.
+
+    Args:
+        wait_before (float): Seconds to wait after the send before
+                             navigating, so the send completes first.
+        sleep_time (int): Seconds to wait for the sent list to load.
+    """
+    try:
+        print(f"[DEBUG] go_to_sent_messages: waiting {wait_before}s after the send...")
+        time.sleep(wait_before)
+
+        url_field = wait_for_control(
+            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
+        )
+        url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
+        url_field_value_pattern.SetValue("https://ediportalen.dk/Messages/Sent")
+        url_field.SendKeys("{ENTER}")
+
+        print(f"[DEBUG] go_to_sent_messages: navigating, sleeping {sleep_time}s...")
+        time.sleep(sleep_time)
+        print("[DEBUG] go_to_sent_messages: done.")
+    except Exception as e:
+        print(f"Error while navigating to the sent messages in EDI Portal: {e}")
+        raise
+
+
 def edi_portal_go_to_send_journal() -> None:
     """
     Navigates to the 'Opret ny journalforsendelse' section in the EDI portal.

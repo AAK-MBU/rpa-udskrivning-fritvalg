@@ -164,6 +164,9 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         lambda _: edifuncs.edi_portal_click_next_button(sleep_time=10),
         lambda _: time.sleep(5),
         lambda _: edifuncs.edi_portal_send_message(),
+        # Sending leaves the portal on the inbox, so go to the sent list
+        # the receipt is read from. Runs in the already-sent case too.
+        lambda _: edifuncs.edi_portal_go_to_sent_messages(),
         # Retrieve the sent receipt
         lambda ctxt: setattr(
             ctxt,
@@ -201,11 +204,11 @@ def edi_portal_handler(context: EdiContext) -> str | None:
     # Execute each step in sequence
     skip_steps = False
     for i, step in enumerate(
-        pipeline[:-2]
-    ):  # Exclude the last two steps from conditional skipping
+        pipeline[:-3]
+    ):  # Exclude the last three steps from conditional skipping
         name = step_names[i] if i < len(step_names) else f"step_{i}"
         try:
-            logger.info("[EDI] Step %d/%d: %s", i + 1, len(pipeline) - 2, name)
+            logger.info("[EDI] Step %d/%d: %s", i + 1, len(pipeline) - 3, name)
             if skip_steps:
                 logger.info("[EDI] Skipping %s (already sent).", name)
                 continue
@@ -213,7 +216,7 @@ def edi_portal_handler(context: EdiContext) -> str | None:
             result = step(context)
             if result:
                 logger.info(
-                    "[EDI] %s returned True — skipping remaining steps until last two.",
+                    "[EDI] %s returned True — skipping remaining steps until last three.",
                     name,
                 )
                 skip_steps = True
@@ -223,8 +226,8 @@ def edi_portal_handler(context: EdiContext) -> str | None:
             logger.error("[EDI] Step %d (%s) failed: %s", i + 1, name, e)
             raise RuntimeError(f"EDI step '{name}' failed: {e}") from e
 
-    # Always run the last two steps
-    for step in pipeline[-2:]:
+    # Always run the last three steps
+    for step in pipeline[-3:]:
         try:
             step(context)
         except Exception as e:
