@@ -14,6 +14,10 @@ import uiautomation as auto
 
 from src.helpers.clean_up import kill_adobe
 
+# Keyboard shortcuts the EDI portal binds to its "Næste" and "Send" buttons.
+NEXT_PAGE_SHORTCUT = "{Alt}n"
+SEND_MESSAGE_SHORTCUT = "{Alt}s"
+
 
 def wait_for_control(
     control_type, search_params, search_depth=1, timeout=30, retry_interval=0.5
@@ -174,51 +178,107 @@ def edi_portal_check_contractor_id(
         raise
 
 
-def edi_portal_click_next_button(sleep_time: int) -> None:
+def _focus_edge_window():
     """
-    Clicks the next button in the EDI portal.
+    Finds the Edge window hosting the EDI portal and gives it focus.
+
+    Returns:
+        The focused Edge window control.
+
+    Raises:
+        TimeoutError: If the Edge window is not found.
+    """
+    edge_window = wait_for_control(
+        auto.WindowControl, {"ClassName": "Chrome_WidgetWin_1"}, search_depth=3
+    )
+    edge_window.SetFocus()
+
+    return edge_window
+
+
+def _try_send_shortcut(shortcut: str) -> bool:
+    """
+    Sends a keyboard shortcut to the Edge window hosting the EDI portal.
 
     Args:
-        sleep_time (int): Time to wait after clicking the next button.
+        shortcut (str): The shortcut in uiautomation SendKeys syntax.
+
+    Returns:
+        bool: True if the shortcut was sent, False if it could not be,
+              in which case the caller falls back to clicking the button.
     """
-    print("[DEBUG] edi_portal_click_next_button: searching for Edge window...")
     try:
-        edge_window = wait_for_control(
-            auto.WindowControl, {"ClassName": "Chrome_WidgetWin_1"}, search_depth=3
-        )
+        print(f"[DEBUG] sending shortcut {shortcut} to the EDI portal...")
+        edge_window = _focus_edge_window()
+        edge_window.SendKeys(shortcut, waitTime=0)
 
-        edge_window.SetFocus()
+        return True
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"[DEBUG] could not send {shortcut} ({e}), falling back to the button.")
+
+        return False
+
+
+def _click_next_button_control() -> None:
+    """
+    Locates the "Næste" button in the EDI portal and clicks it.
+
+    Fallback for when the Alt+N shortcut cannot be sent. Looks the
+    button up by name first, then by AutomationId.
+
+    Raises:
+        RuntimeError: If the button is not found on the current page.
+    """
+    edge_window = _focus_edge_window()
+
+    print("[DEBUG] edi_portal_click_next_button: searching for Næste button...")
+
+    try:
+        next_button = wait_for_control(
+            edge_window.ButtonControl, {"Name": "Næste"}, search_depth=50, timeout=5
+        )
+    except TimeoutError:
+        next_button = None
+
+    if not next_button:
         print(
-            "[DEBUG] edi_portal_click_next_button: Edge window found, searching for Næste button..."
+            "[DEBUG] edi_portal_click_next_button: Næste not found by name, trying AutomationId..."
         )
-
         try:
             next_button = wait_for_control(
-                edge_window.ButtonControl, {"Name": "Næste"}, search_depth=50, timeout=5
+                edge_window.ButtonControl,
+                {"AutomationId": "patientInformationNextButton"},
+                search_depth=50,
+                timeout=5,
             )
         except TimeoutError:
             next_button = None
 
-        if not next_button:
-            print(
-                "[DEBUG] edi_portal_click_next_button: Næste not found by name, trying AutomationId..."
-            )
-            try:
-                next_button = wait_for_control(
-                    edge_window.ButtonControl,
-                    {"AutomationId": "patientInformationNextButton"},
-                    search_depth=50,
-                    timeout=5,
-                )
-            except TimeoutError:
-                next_button = None
+    if not next_button:
+        raise RuntimeError("Next button not found in EDI Portal")
 
-        if not next_button:
-            raise RuntimeError("Next button not found in EDI Portal")
-        print(
-            f"[DEBUG] edi_portal_click_next_button: clicking button, then sleeping {sleep_time}s..."
-        )
-        next_button.Click(simulateMove=False, waitTime=0)
+    print("[DEBUG] edi_portal_click_next_button: clicking button...")
+    next_button.Click(simulateMove=False, waitTime=0)
+
+
+def edi_portal_click_next_button(sleep_time: int, use_shortcut: bool = True) -> None:
+    """
+    Advances the EDI portal to the next page.
+
+    The portal exposes Alt+N as a keyboard shortcut for the "Næste"
+    button, so the shortcut is sent to the Edge window instead of
+    locating and clicking the button in the UI tree. If the shortcut
+    cannot be sent, the button is located and clicked instead.
+
+    Args:
+        sleep_time (int): Time to wait after advancing to the next page.
+        use_shortcut (bool): Send Alt+N instead of clicking the button.
+    """
+    try:
+        if not (use_shortcut and _try_send_shortcut(NEXT_PAGE_SHORTCUT)):
+            _click_next_button_control()
+
+        print(f"[DEBUG] edi_portal_click_next_button: sleeping {sleep_time}s...")
         time.sleep(sleep_time)
         print("[DEBUG] edi_portal_click_next_button: done.")
     except Exception as e:
@@ -460,21 +520,43 @@ def edi_portal_choose_priority(priority: str = "Rutine") -> None:
         raise
 
 
-def edi_portal_send_message() -> None:
+def _click_send_message_button_control() -> None:
+    """
+    Locates the "Send" button in the EDI portal and clicks it.
+
+    Fallback for when the Alt+S shortcut cannot be sent.
+
+    Raises:
+        TimeoutError: If the button is not found.
+    """
+    root_web_area = wait_for_control(
+        auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
+    )
+
+    send_message_button = wait_for_control(
+        root_web_area.ButtonControl,
+        {"AutomationId": "submitButton"},
+        search_depth=4,
+    )
+    send_message_button.Click(simulateMove=False, waitTime=0)
+
+
+def edi_portal_send_message(use_shortcut: bool = True) -> None:
     """
     Sends a message in the EDI portal.
+
+    The portal exposes Alt+S as a keyboard shortcut for the "Send"
+    button, so the shortcut is sent to the Edge window instead of
+    locating and clicking the button in the UI tree. If the shortcut
+    cannot be sent, the button is located and clicked instead.
+
+    Args:
+        use_shortcut (bool): Send Alt+S instead of clicking the button.
     """
     try:
-        root_web_area = wait_for_control(
-            auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
-        )
+        if not (use_shortcut and _try_send_shortcut(SEND_MESSAGE_SHORTCUT)):
+            _click_send_message_button_control()
 
-        send_message_button = wait_for_control(
-            root_web_area.ButtonControl,
-            {"AutomationId": "submitButton"},
-            search_depth=4,
-        )
-        send_message_button.Click(simulateMove=False, waitTime=0)
         print("Message sent successfully.")
     except Exception as e:
         print(f"Error while sending message in EDI Portal: {e}")
