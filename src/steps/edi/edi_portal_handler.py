@@ -130,7 +130,11 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         # Navigation
         lambda ctxt: edifuncs.edi_portal_is_patient_data_sent(subject=ctxt.subject),
         lambda _: edifuncs.edi_portal_go_to_send_journal(),
-        lambda _: edifuncs.edi_portal_open_recipient_page(),
+        # The patient page is reached by a browser navigation and will not
+        # reliably take keyboard focus, so this one transition is clicked.
+        lambda _: edifuncs.edi_portal_click_next_button(
+            sleep_time=2, use_shortcut=False
+        ),
         # Contractor lookup and selection
         lambda ctxt: edifuncs.edi_portal_lookup_contractor_id(
             extern_clinic_data=ctxt.extern_clinic_data
@@ -181,7 +185,7 @@ def edi_portal_handler(context: EdiContext) -> str | None:
     step_names = [
         "is_patient_data_sent",
         "go_to_send_journal",
-        "open_recipient_page (page 1→2)",
+        "click_next (page 1→2)",
         "lookup_contractor_id",
         "choose_receiver",
         "click_next (page 2→3)",

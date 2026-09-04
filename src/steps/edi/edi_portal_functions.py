@@ -170,10 +170,15 @@ def edi_portal_check_contractor_id(
 
 def _focus_edge_window():
     """
-    Finds the Edge window hosting the EDI portal and gives it focus.
+    Finds the Edge window hosting the EDI portal and activates it.
+
+    `SetActive` is used rather than `SetFocus`: it brings the window to
+    the foreground and waits for the change to settle, whereas
+    `SetFocus` is a bare UIA call that does not wait and returns False
+    silently when it fails.
 
     Returns:
-        The focused Edge window control.
+        The activated Edge window control.
 
     Raises:
         TimeoutError: If the Edge window is not found.
@@ -181,7 +186,10 @@ def _focus_edge_window():
     edge_window = wait_for_control(
         auto.WindowControl, {"ClassName": "Chrome_WidgetWin_1"}, search_depth=3
     )
-    edge_window.SetFocus()
+
+    if not edge_window.SetActive():
+        print("[DEBUG] SetActive failed on the Edge window, trying SetFocus...")
+        edge_window.SetFocus()
 
     return edge_window
 
@@ -191,39 +199,51 @@ def _try_send_shortcut(shortcut: str, wait_before: float = 2.0) -> bool:
     Sends a keyboard shortcut to the EDI portal page.
 
     The portal's shortcuts are HTML accesskeys handled by the page
-    itself, which has two consequences:
+    itself, so they only fire when the keyboard focus is inside the
+    document — after a navigation via the address bar the focused
+    element is the address bar, where Edge swallows the keystroke.
 
-    - They only fire when the keyboard focus is inside the document, so
-      the shortcut goes to the document control (which focuses itself
-      first). Focusing the Edge window alone is not enough: after a
-      navigation via the address bar the focused element is the address
-      bar, where Edge would swallow the keystroke.
-    - They are dropped while the page is still rendering, so we give the
-      page a moment to settle first. A short sleep is used rather than
-      waiting for the button to appear in the UI tree: searching the
-      window for it is slow, and it is not reliably found on every page
-      of the wizard.
+    Focus is therefore set on the document and checked, and the keys are
+    only injected after the change has had time to settle: `SetFocus`
+    neither waits nor raises when it fails, so keys sent straight after
+    it can land in whichever window had focus before.
 
     Args:
         shortcut (str): The shortcut in uiautomation SendKeys syntax.
-        wait_before (float): Seconds to let the page settle before
-                             sending the shortcut.
+        wait_before (float): Seconds to let the focus change and the
+                             page settle before sending the shortcut.
 
     Returns:
         bool: True if the shortcut was sent, False if it could not be,
               in which case the caller falls back to clicking the button.
     """
     try:
-        print(f"[DEBUG] letting the page settle for {wait_before}s...")
-        time.sleep(wait_before)
-
         _focus_edge_window()
 
-        print(f"[DEBUG] sending shortcut {shortcut} to the EDI portal...")
         root_web_area = wait_for_control(
             auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
         )
-        root_web_area.SendKeys(shortcut, waitTime=0)
+
+        if not root_web_area.SetFocus():
+            print("[DEBUG] the portal page would not take keyboard focus.")
+
+            return False
+
+        time.sleep(wait_before)
+
+        focused = auto.GetFocusedControl()
+        if focused is None:
+            print("[DEBUG] nothing holds the keyboard focus.")
+
+            return False
+
+        print(
+            f"[DEBUG] focus before sending {shortcut}: "
+            f"{focused.ControlTypeName} Name={focused.Name!r} "
+            f"ClassName={focused.ClassName!r}"
+        )
+
+        auto.SendKeys(shortcut, waitTime=0)
 
         return True
     except Exception as e:  # pylint: disable=broad-except
@@ -263,51 +283,6 @@ def _find_recipient_search_box(root_web_area, timeout: int = 2):
             continue
 
     return None
-
-
-def edi_portal_open_recipient_page(
-    wait_before: float = 3.0, max_attempts: int = 3
-) -> None:
-    """
-    Advances from the patient information page to the recipient page.
-
-    This is the only transition that follows a full browser navigation,
-    so the page can still be loading when Alt+N is sent — and an
-    accesskey that arrives before the page is live is dropped without a
-    trace. Rather than betting on one fixed wait being long enough, the
-    shortcut is re-sent until the recipient search box shows up.
-
-    The wizard's later transitions don't need this: by then the page has
-    already been typed into and clicked, so it is known to be live.
-
-    Args:
-        wait_before (float): Seconds to let the page settle before each
-                             attempt.
-        max_attempts (int): How many times to send Alt+N.
-
-    Raises:
-        RuntimeError: If the recipient page never appears.
-    """
-    for attempt in range(1, max_attempts + 1):
-        print(f"[DEBUG] open_recipient_page: Alt+N attempt {attempt}/{max_attempts}")
-
-        if not _try_send_shortcut(NEXT_PAGE_SHORTCUT, wait_before):
-            _click_next_button_control()
-
-        root_web_area = wait_for_control(
-            auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
-        )
-
-        if _find_recipient_search_box(root_web_area, timeout=4) is not None:
-            print("[DEBUG] open_recipient_page: recipient page is up.")
-            return
-
-        print("[DEBUG] open_recipient_page: still on the patient page.")
-
-    raise RuntimeError(
-        "The EDI portal stayed on the patient information page after "
-        f"{max_attempts} Alt+N attempts."
-    )
 
 
 def _click_next_button_control() -> None:
