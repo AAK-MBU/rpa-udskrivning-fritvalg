@@ -198,51 +198,35 @@ def _try_send_shortcut(shortcut: str, wait_before: float = 2.0) -> bool:
     """
     Sends a keyboard shortcut to the EDI portal page.
 
-    The portal's shortcuts are HTML accesskeys handled by the page
-    itself, so they only fire when the keyboard focus is inside the
-    document — after a navigation via the address bar the focused
-    element is the address bar, where Edge swallows the keystroke.
-
-    Focus is therefore set on the document and checked, and the keys are
-    only injected after the change has had time to settle: `SetFocus`
-    neither waits nor raises when it fails, so keys sent straight after
-    it can land in whichever window had focus before.
+    The shortcuts are HTML accesskeys handled by the page, so the
+    keyboard focus has to be inside the document. Nothing is done to
+    move it: every step that precedes a shortcut clicks inside the page
+    (the clinic checkbox, a form field), which leaves the focus exactly
+    where the shortcut needs it — the same state as a person clicking
+    the clinic and then hitting Alt+N. Focusing the window or the
+    document on top of that only blurs what the click focused.
 
     Args:
         shortcut (str): The shortcut in uiautomation SendKeys syntax.
-        wait_before (float): Seconds to let the focus change and the
-                             page settle before sending the shortcut.
+        wait_before (float): Seconds to let the page settle before
+                             sending the shortcut.
 
     Returns:
         bool: True if the shortcut was sent, False if it could not be,
               in which case the caller falls back to clicking the button.
     """
     try:
-        _focus_edge_window()
-
-        root_web_area = wait_for_control(
-            auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
-        )
-
-        if not root_web_area.SetFocus():
-            print("[DEBUG] the portal page would not take keyboard focus.")
-
-            return False
-
+        print(f"[DEBUG] letting the page settle {wait_before}s before {shortcut}...")
         time.sleep(wait_before)
 
         focused = auto.GetFocusedControl()
-        if focused is None:
-            print("[DEBUG] nothing holds the keyboard focus.")
+        if focused is not None:
+            print(
+                f"[DEBUG] focus is on {focused.ControlTypeName} "
+                f"Name={focused.Name!r} ClassName={focused.ClassName!r}"
+            )
 
-            return False
-
-        print(
-            f"[DEBUG] focus before sending {shortcut}: "
-            f"{focused.ControlTypeName} Name={focused.Name!r} "
-            f"ClassName={focused.ClassName!r}"
-        )
-
+        print(f"[DEBUG] sending {shortcut}...")
         auto.SendKeys(shortcut, waitTime=0)
 
         return True
