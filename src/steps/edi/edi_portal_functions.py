@@ -128,24 +128,7 @@ def edi_portal_check_contractor_id(
             auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
         )
 
-        class_options = [
-            "form-control filter_search",
-            "form-control filter_search valid",
-        ]
-
-        search_box = None
-        for class_name in class_options:
-            try:
-                search_box = wait_for_control(
-                    root_web_area.EditControl,
-                    {"ClassName": class_name},
-                    search_depth=22,
-                    timeout=2,
-                )
-            except TimeoutError:
-                continue
-            if search_box:
-                break
+        search_box = _find_recipient_search_box(root_web_area)
 
         if not search_box:
             raise RuntimeError(
@@ -249,6 +232,84 @@ def _try_send_shortcut(shortcut: str, wait_before: float = 2.0) -> bool:
         return False
 
 
+def _find_recipient_search_box(root_web_area, timeout: int = 2):
+    """
+    Finds the recipient search box on the EDI portal's recipient page.
+
+    Doubles as the "are we on the recipient page yet" check, since the
+    box only exists there.
+
+    Args:
+        root_web_area: The portal's document control.
+        timeout (int): How long to wait for each of the class variants.
+
+    Returns:
+        The search box control, or None if the page has no search box.
+    """
+    class_options = [
+        "form-control filter_search",
+        "form-control filter_search valid",
+    ]
+
+    for class_name in class_options:
+        try:
+            return wait_for_control(
+                root_web_area.EditControl,
+                {"ClassName": class_name},
+                search_depth=22,
+                timeout=timeout,
+            )
+        except TimeoutError:
+            continue
+
+    return None
+
+
+def edi_portal_open_recipient_page(
+    wait_before: float = 3.0, max_attempts: int = 3
+) -> None:
+    """
+    Advances from the patient information page to the recipient page.
+
+    This is the only transition that follows a full browser navigation,
+    so the page can still be loading when Alt+N is sent — and an
+    accesskey that arrives before the page is live is dropped without a
+    trace. Rather than betting on one fixed wait being long enough, the
+    shortcut is re-sent until the recipient search box shows up.
+
+    The wizard's later transitions don't need this: by then the page has
+    already been typed into and clicked, so it is known to be live.
+
+    Args:
+        wait_before (float): Seconds to let the page settle before each
+                             attempt.
+        max_attempts (int): How many times to send Alt+N.
+
+    Raises:
+        RuntimeError: If the recipient page never appears.
+    """
+    for attempt in range(1, max_attempts + 1):
+        print(f"[DEBUG] open_recipient_page: Alt+N attempt {attempt}/{max_attempts}")
+
+        if not _try_send_shortcut(NEXT_PAGE_SHORTCUT, wait_before):
+            _click_next_button_control()
+
+        root_web_area = wait_for_control(
+            auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
+        )
+
+        if _find_recipient_search_box(root_web_area, timeout=4) is not None:
+            print("[DEBUG] open_recipient_page: recipient page is up.")
+            return
+
+        print("[DEBUG] open_recipient_page: still on the patient page.")
+
+    raise RuntimeError(
+        "The EDI portal stayed on the patient information page after "
+        f"{max_attempts} Alt+N attempts."
+    )
+
+
 def _click_next_button_control() -> None:
     """
     Locates the "Næste" button in the EDI portal and clicks it.
@@ -340,24 +401,7 @@ def edi_portal_lookup_contractor_id(extern_clinic_data: dict) -> None:
             auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
         )
 
-        class_options = [
-            "form-control filter_search",
-            "form-control filter_search valid",
-        ]
-
-        search_box = None
-        for class_name in class_options:
-            try:
-                search_box = wait_for_control(
-                    root_web_area.EditControl,
-                    {"ClassName": class_name},
-                    search_depth=22,
-                    timeout=2,
-                )
-            except TimeoutError:
-                continue
-            if search_box:
-                break
+        search_box = _find_recipient_search_box(root_web_area)
 
         if not search_box:
             raise RuntimeError(
