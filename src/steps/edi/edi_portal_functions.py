@@ -198,7 +198,14 @@ def _focus_edge_window():
 
 def _try_send_shortcut(shortcut: str) -> bool:
     """
-    Sends a keyboard shortcut to the Edge window hosting the EDI portal.
+    Sends a keyboard shortcut to the EDI portal page.
+
+    The portal's shortcuts are HTML accesskeys handled by the page, so
+    they only fire when the keyboard focus is inside the document.
+    Sending them to the document control focuses it first — focusing
+    the Edge window alone is not enough, because after a navigation via
+    the address bar the focused element is the address bar, where Edge
+    would swallow the keystroke.
 
     Args:
         shortcut (str): The shortcut in uiautomation SendKeys syntax.
@@ -209,8 +216,12 @@ def _try_send_shortcut(shortcut: str) -> bool:
     """
     try:
         print(f"[DEBUG] sending shortcut {shortcut} to the EDI portal...")
-        edge_window = _focus_edge_window()
-        edge_window.SendKeys(shortcut, waitTime=0)
+        _focus_edge_window()
+
+        root_web_area = wait_for_control(
+            auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
+        )
+        root_web_area.SendKeys(shortcut, waitTime=0)
 
         return True
     except Exception as e:  # pylint: disable=broad-except
