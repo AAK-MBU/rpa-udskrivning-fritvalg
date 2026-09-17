@@ -112,6 +112,8 @@ def edi_portal_handler(context: EdiContext) -> str | None:
     patient_name = context.queue_element.get("patient_name")
     subject = context.value_data["edi_portal_content"]["subject"]
 
+    base_subject = subject
+
     if not subject:
         raise ValueError("Subject is required.")
 
@@ -128,7 +130,7 @@ def edi_portal_handler(context: EdiContext) -> str | None:
     # Define the ordered list of pipeline steps
     pipeline: list[Step] = [
         # Navigation
-        lambda ctxt: edifuncs.edi_portal_is_patient_data_sent(subject=ctxt.subject),
+        lambda ctxt: edifuncs.edi_portal_is_patient_data_sent(subject=base_subject),
         lambda _: edifuncs.edi_portal_go_to_send_journal(),
         # The patient page is reached by a browser navigation and will not
         # reliably take keyboard focus, so this one transition is clicked.
