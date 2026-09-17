@@ -671,7 +671,7 @@ def _find_latest_matching_row(grid_pattern, subject: str) -> int | None:
         message = grid_pattern.GetItem(row, 6).Name or ""
         date_str = grid_pattern.GetItem(row, 2).Name or ""
 
-        if subject != message:
+        if subject not in message:
             continue
 
         parsed_date = _parse_date(date_str)
