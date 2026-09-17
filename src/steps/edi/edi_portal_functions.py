@@ -1124,7 +1124,10 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
     )
     try:
         url_field = wait_for_control(
-            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
+            auto.EditControl,
+            {"Name": "Adresse- og søgelinje"},
+            search_depth=25,
+            # auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
         )
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Messages/Sent")
@@ -1229,7 +1232,10 @@ def edi_portal_go_to_sent_messages(
         time.sleep(wait_before)
 
         url_field = wait_for_control(
-            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
+            auto.EditControl,
+            {"Name": "Adresse- og søgelinje"},
+            search_depth=25,
+            # auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
         )
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Messages/Sent")
@@ -1249,7 +1255,10 @@ def edi_portal_go_to_send_journal() -> None:
     """
     try:
         url_field = wait_for_control(
-            auto.EditControl, {"Name": "Adresse- og søgelinje"}, search_depth=25
+            auto.EditControl,
+            {"Name": "Adresse- og søgelinje"},
+            search_depth=25,
+            # auto.EditControl, {"Name": "Address and search bar"}, search_depth=25
         )
         url_field_value_pattern = url_field.GetPattern(auto.PatternId.ValuePattern)
         url_field_value_pattern.SetValue("https://ediportalen.dk/Journal/Create")
