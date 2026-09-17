@@ -173,7 +173,7 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         lambda ctxt: setattr(
             ctxt,
             "receipt_path",
-            edifuncs.edi_portal_get_journal_sent_receip(subject=ctxt.subject),
+            edifuncs.edi_portal_get_journal_sent_receip(subject=base_subject),
         ),
         # Rename the receipt on disk
         lambda ctxt: setattr(
