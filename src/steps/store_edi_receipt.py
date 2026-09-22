@@ -37,7 +37,7 @@ def _receipt_already_uploaded(db: SolteqTandDatabase, ctx: PatientContext) -> bo
     """
     one_month_ago = datetime.datetime.now(datetime.UTC).replace(
         tzinfo=None
-    ) - relativedelta(months=1)
+    ) - relativedelta(months=0)
 
     documents = db.get_list_of_documents(
         filters={
