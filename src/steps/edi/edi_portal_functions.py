@@ -1162,7 +1162,7 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
         #             break
 
         # Define one month ago here
-        one_month_ago = datetime.now(UTC) - timedelta(days=30)
+        one_month_ago = datetime.now(UTC) - timedelta(days=20)
 
         if row_count > 0:
             for row in range(1, row_count):
