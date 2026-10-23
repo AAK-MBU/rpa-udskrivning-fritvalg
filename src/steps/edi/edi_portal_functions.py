@@ -650,13 +650,18 @@ def _find_latest_matching_row(grid_pattern, subject: str) -> int | None:
     """Find the most recent row in the sent grid matching the given subject."""
 
     def _parse_date(date_str: str) -> datetime | None:
-        """Parse date from format like '11-09-2025 13:28'"""
+        """Parse date from format like '11-09-2025 13:28' or '22-10-2026 09.25'.
+
+        The portal renders the time with either a colon or a dot
+        depending on the machine's regional settings, so both are
+        accepted - an unparsed date makes the row count as no match.
+        """
         if not date_str:
             return None
         try:
             date, time = date_str.split(" ")
             day, month, year = date.split("-")
-            hour, minute = time.split(":")
+            hour, minute = time.replace(".", ":").split(":")
             return datetime(
                 int(year), int(month), int(day), int(hour), int(minute), tzinfo=UTC
             )
@@ -1106,13 +1111,18 @@ def edi_portal_is_patient_data_sent(subject: str) -> bool:
     """
 
     def _parse_date(date_str: str) -> datetime | None:
-        """Parse date from format like '11-09-2025 13:28'"""
+        """Parse date from format like '11-09-2025 13:28' or '22-10-2026 09.25'.
+
+        The portal renders the time with either a colon or a dot
+        depending on the machine's regional settings, so both are
+        accepted - an unparsed date makes the row count as no match.
+        """
         if not date_str:
             return None
         try:
             date, time = date_str.split(" ")
             day, month, year = date.split("-")
-            hour, minute = time.split(":")
+            hour, minute = time.replace(".", ":").split(":")
             return datetime(
                 int(year), int(month), int(day), int(hour), int(minute), tzinfo=UTC
             )
