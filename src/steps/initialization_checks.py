@@ -19,6 +19,7 @@ from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatab
 from src.core.automation_runner import AutomationRunner
 from src.core.patient_context import PatientContext
 from src.core.step_configs import StepConfig
+from src.helpers.edi_redirects import get_edi_redirect
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ def check_contractor_in_edi_portal(
         result = runner.step(
             "Check contractor ID in EDI portal",
             app.edi_portal_check_contractor_id,
-            ctx.extern_clinic_data,
+            ctx.edi_clinic_data,
         )
 
         if result is None:
@@ -224,7 +225,20 @@ def run_initialization_checks(
     if ctx.contractor_id is None:
         raise ValueError("Contractor ID is missing.")
 
+    # Deal check uses the clinic's own provider number (the deal is with the
+    # actual clinic), not the EDI recipient.
     check_extern_clinic_deal(db, ctx.contractor_id)
+
+    # Resolve the EDI recipient once; all EDI portal steps use ctx.edi_clinic_data.
+    ctx.edi_redirect = get_edi_redirect(ctx.contractor_id)
+    if ctx.edi_redirect:
+        logger.info(
+            "EDI redirect for contractor %s: recipient %s (phone: %s, subject suffix: %r).",
+            ctx.contractor_id,
+            ctx.edi_redirect["contractor_id"],
+            ctx.edi_redirect["phone_number"] or ctx.clinic_phone_number,
+            ctx.edi_redirect["subject_suffix"],
+        )
 
     ctx.administrative_note = check_administrative_note(db, ctx)
 

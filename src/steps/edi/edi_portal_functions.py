@@ -14,6 +14,7 @@ import pyodbc
 import uiautomation as auto
 
 from src.helpers.clean_up import kill_adobe
+from src.helpers.edi_redirects import build_edi_subject
 
 # Letters the EDI portal binds as Alt shortcuts for "Næste" and "Send".
 NEXT_PAGE_SHORTCUT_LETTER = "n"
@@ -109,19 +110,9 @@ def edi_portal_check_contractor_id(
         dict: A dictionary containing the row count and whether the phone number matches.
     """
     try:
-        # Handle Hasle Torv Clinic special case
-        if (
-            extern_clinic_data[0]["contractorId"] == "477052"
-            or extern_clinic_data[0]["contractorId"] == "470678"
-        ):
-            contractor_id = "485055"
-            clinic_phone_number = "86135240"
-        elif extern_clinic_data[0]["contractorId"] == "469378":
-            contractor_id = "472034"
-            clinic_phone_number = "86124500"
-        else:
-            contractor_id = extern_clinic_data[0]["contractorId"]
-            clinic_phone_number = extern_clinic_data[0]["phoneNumber"]
+        # EDI redirects are applied by the caller (PatientContext.edi_clinic_data)
+        contractor_id = extern_clinic_data[0]["contractorId"]
+        clinic_phone_number = extern_clinic_data[0]["phoneNumber"]
 
         edi_portal_click_next_button(sleep_time=3)
 
@@ -380,13 +371,8 @@ def edi_portal_lookup_contractor_id(extern_clinic_data: dict) -> None:
         extern_clinic_data (dict): A dictionary containing the contractor ID and phone number.
     """
     try:
-        if (
-            extern_clinic_data[0]["contractorId"] == "477052"
-            or extern_clinic_data[0]["contractorId"] == "470678"
-        ):
-            contractor_id = "485055"
-        else:
-            contractor_id = extern_clinic_data[0]["contractorId"]
+        # EDI redirects are applied by the caller (PatientContext.edi_clinic_data)
+        contractor_id = extern_clinic_data[0]["contractorId"]
 
         root_web_area = wait_for_control(
             auto.DocumentControl, {"AutomationId": "RootWebArea"}, search_depth=30
@@ -418,13 +404,8 @@ def edi_portal_choose_receiver(extern_clinic_data: dict) -> None:
         extern_clinic_data (dict): A dictionary containing the contractor ID and phone number.
     """
     try:
-        if (
-            extern_clinic_data[0]["contractorId"] == "477052"
-            or extern_clinic_data[0]["contractorId"] == "470678"
-        ):
-            clinic_phone_number = "86135240"
-        else:
-            clinic_phone_number = extern_clinic_data[0]["phoneNumber"]
+        # EDI redirects are applied by the caller (PatientContext.edi_clinic_data)
+        clinic_phone_number = extern_clinic_data[0]["phoneNumber"]
 
         table_dentists = wait_for_control(
             auto.TableControl,
@@ -455,30 +436,20 @@ def edi_portal_choose_receiver(extern_clinic_data: dict) -> None:
 
 def edi_portal_add_content(
     edi_portal_content: dict,
-    extern_clinic_data: dict,
     journal_continuation_text: str | None = None,
+    subject_suffix: str | None = None,
 ) -> None:
     """
     Adds content to the EDI portal based on the provided queue element and content template.
 
     Args:
-        queue_element (dict): The queue element containing data for the content.
         edi_portal_content (dict): The content template for the EDI portal.
         journal_continuation_text (str | None): Additional text to be added to the content.
+        subject_suffix (str | None): Clinic-specific subject suffix from the EDI redirect.
     """
 
-    subject = edi_portal_content["subject"]
-
-    if not subject:
-        raise ValueError("Subject is required.")
-
-    if extern_clinic_data[0]["contractorId"] == "477052":
-        subject = subject + " på Tandklinikken Hasle Torv"
-    elif extern_clinic_data[0]["contractorId"] == "470678":
-        subject = subject + " på Tandklinikken Brobjergparken"
-
-    # Truncate subject to 66 characters to fit EDI portal limitations
-    subject = subject[:66]
+    # Adds the clinic suffix (if any) and truncates to 66 characters
+    subject = build_edi_subject(edi_portal_content["subject"], subject_suffix)
 
     body = edi_portal_content["body"]
     if not body:

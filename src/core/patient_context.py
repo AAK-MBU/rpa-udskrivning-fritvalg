@@ -49,6 +49,9 @@ class PatientContext:
     # EDI Portal specific data
     edi_portal_file_paths: str | None = None
     edi_receipt_path: str | None = None
+    # Active EDI redirect for the extern clinic (from ProviderNumberRedirects),
+    # set during initialization; None if the clinic is reached directly.
+    edi_redirect: dict | None = None
 
     # Dashboard
     # process_name: str | None = None
@@ -65,6 +68,29 @@ class PatientContext:
         """Get the phone number from extern clinic data."""
         if self.extern_clinic_data:
             return self.extern_clinic_data[0].get("phoneNumber")
+        return None
+
+    @property
+    def edi_clinic_data(self) -> list:
+        """Extern clinic data as the EDI portal should see it.
+
+        Same as extern_clinic_data, but with contractorId/phoneNumber replaced
+        by the EDI recipient when an EDI redirect applies. Use this for every
+        EDI portal lookup, so all steps target the same recipient.
+        """
+        if not self.extern_clinic_data or not self.edi_redirect:
+            return self.extern_clinic_data
+        clinic = dict(self.extern_clinic_data[0])
+        clinic["contractorId"] = self.edi_redirect["contractor_id"]
+        if self.edi_redirect.get("phone_number"):
+            clinic["phoneNumber"] = self.edi_redirect["phone_number"]
+        return [clinic, *self.extern_clinic_data[1:]]
+
+    @property
+    def edi_subject_suffix(self) -> str | None:
+        """Clinic-specific suffix for the EDI message subject, if any."""
+        if self.edi_redirect:
+            return self.edi_redirect.get("subject_suffix")
         return None
 
     @property

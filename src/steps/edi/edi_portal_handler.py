@@ -10,6 +10,7 @@ from typing import Any
 
 import pyodbc
 
+from src.helpers.edi_redirects import build_edi_subject
 from src.steps.edi import edi_portal_functions as edifuncs
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,9 @@ class EdiContext:
     required for processing in the EDI portal handler.
 
     Attributes:
-        extern_clinic_data (Dict[str, Any]): External clinic data used in processing.
+        extern_clinic_data (Dict[str, Any]): External clinic data as the EDI portal
+            should see it (EDI redirect already applied, see PatientContext.edi_clinic_data).
+        subject_suffix (str | None): Clinic-specific suffix for the subject, from the EDI redirect.
         queue_element (Dict[str, Any]): Queue element containing relevant information.
         journal_note (str): Note to be added to the journal.
         path_to_files_for_upload (str): Path to the files that need to be uploaded.
@@ -36,6 +39,7 @@ class EdiContext:
     queue_element: dict[str, Any]
     path_to_files_for_upload: str
     consent: bool
+    subject_suffix: str | None = None
     subject: str | None = None
     journal_note: str | None = None
     value_data: dict[str, Any] | None = None
@@ -114,16 +118,8 @@ def edi_portal_handler(context: EdiContext) -> str | None:
 
     base_subject = subject
 
-    if not subject:
-        raise ValueError("Subject is required.")
-
-    if context.extern_clinic_data[0]["contractorId"] == "477052":
-        subject = subject + " på Tandklinikken Hasle Torv"
-    elif context.extern_clinic_data[0]["contractorId"] == "470678":
-        subject = subject + " på Tandklinikken Brobjergparken"
-
-    # Truncate subject to 66 characters to fit EDI portal limitations
-    subject = subject[:66]
+    # Adds the clinic suffix (if any) and truncates to 66 characters
+    subject = build_edi_subject(base_subject, context.subject_suffix)
 
     context.subject = subject
 
@@ -149,7 +145,7 @@ def edi_portal_handler(context: EdiContext) -> str | None:
         lambda ctxt: edifuncs.edi_portal_add_content(
             edi_portal_content=ctxt.value_data["edi_portal_content"],
             journal_continuation_text=ctxt.journal_note,
-            extern_clinic_data=ctxt.extern_clinic_data,
+            subject_suffix=ctxt.subject_suffix,
         ),
         lambda _: edifuncs.edi_portal_click_next_button(sleep_time=2),
         # File upload
