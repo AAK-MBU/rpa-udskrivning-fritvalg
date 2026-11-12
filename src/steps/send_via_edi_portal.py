@@ -26,6 +26,7 @@ from src.core.automation_runner import AutomationRunner
 from src.core.patient_context import PatientContext
 from src.core.step_configs import StepConfig
 from src.helpers.clean_up import kill_adobe
+from src.helpers.edi_redirects import build_edi_subject
 from src.steps.edi.edi_portal_handler import EdiContext, edi_portal_handler
 
 logger = logging.getLogger(__name__)
@@ -64,29 +65,19 @@ def _get_edi_portal_content(db_conn: str) -> dict:
 def _build_subject(ctx: PatientContext, value_data: dict) -> str:
     """Build the EDI portal subject line.
 
-    Adds clinic-specific suffix for Hasle Torv and Brobjergparken,
+    Adds the clinic-specific suffix from the EDI redirect (if any),
     and truncates to 66 characters (EDI portal limitation).
 
     Args:
-        ctx: The patient context with extern_clinic_data.
+        ctx: The patient context with edi_redirect resolved.
         value_data: Parsed EDI portal content configuration.
 
     Returns:
         The subject string, max 66 characters.
     """
-    subject = value_data["edi_portal_content"]["subject"]
-
-    if not subject:
-        raise ValueError("EDI portal subject is required but empty.")
-
-    contractor_id = ctx.contractor_id
-
-    if contractor_id == "477052":
-        subject = subject + " på Tandklinikken Hasle Torv"
-    elif contractor_id == "470678":
-        subject = subject + " på Tandklinikken Brobjergparken"
-
-    return subject[:66]
+    return build_edi_subject(
+        value_data["edi_portal_content"]["subject"], ctx.edi_subject_suffix
+    )
 
 
 def _run_edi_pipeline(
@@ -122,7 +113,8 @@ def _run_edi_pipeline(
 
     # Build the EdiContext for the old handler
     edi_ctx = EdiContext(
-        extern_clinic_data=ctx.extern_clinic_data,
+        extern_clinic_data=ctx.edi_clinic_data,
+        subject_suffix=ctx.edi_subject_suffix,
         queue_element=queue_element,
         path_to_files_for_upload=ctx.edi_portal_file_paths,
         journal_note=ctx.journal_note_text,
