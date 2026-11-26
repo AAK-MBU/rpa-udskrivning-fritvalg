@@ -19,6 +19,7 @@ import logging
 import os
 import pathlib
 import shutil
+import time
 
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
@@ -29,6 +30,37 @@ from src.core.step_configs import StepConfig
 logger = logging.getLogger(__name__)
 
 TMP_FOLDER = r"C:\tmp\tmt"
+
+
+def _wait_for_document_file(
+    path: str, timeout: float = 30.0, interval: float = 1.0
+) -> bool:
+    """Wait for a document file to appear on disk.
+
+    Solteq writes the journal PDF to the document store after the GUI
+    action that creates it has returned, so a document created moments
+    earlier can have its database row in place while the file itself
+    is not there yet.
+
+    Args:
+        path: The document's source path from the database.
+        timeout: How long to wait for the file, in seconds.
+        interval: Seconds between checks.
+
+    Returns:
+        True if the file is there, False if it never appeared.
+    """
+    deadline = time.monotonic() + timeout
+
+    while True:
+        if os.path.exists(path):
+            return True
+
+        if time.monotonic() >= deadline:
+            return False
+
+        logger.info("Waiting for document file to appear: %s", path)
+        time.sleep(interval)
 
 
 def _get_documents_from_db(
@@ -94,6 +126,9 @@ def _copy_documents_to_temp(
 
     Returns:
         Path to the temporary directory containing the copied documents.
+
+    Raises:
+        FileNotFoundError: If a document's file never appears on disk.
     """
     temp_dir = os.path.join(TMP_FOLDER, ctx.patient_cpr, "edi_portal")
     os.makedirs(temp_dir, exist_ok=True)
@@ -101,6 +136,14 @@ def _copy_documents_to_temp(
     for doc in documents:
         source = doc["fileSourcePath"]
         destination = os.path.join(temp_dir, doc["OriginalFilename"])
+
+        if not _wait_for_document_file(source):
+            raise FileNotFoundError(
+                f"Document file not found on disk: {source} "
+                f"(type={doc.get('DocumentType')}, "
+                f"created={doc.get('DocumentCreatedDate')})"
+            )
+
         shutil.copy2(source, destination)
         logger.info("Copied %s → %s", os.path.basename(source), doc["OriginalFilename"])
 
